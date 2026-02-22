@@ -104,7 +104,7 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
             scriptProcessor.connect(inputAudioContext.destination);
           },
           onmessage: async (message: LiveServerMessage) => {
-            const audioData = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+            const audioData = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
             if (audioData) {
               nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputAudioContext.currentTime);
               const audioBuffer = await decodeAudioData(decode(audioData), outputAudioContext, 24000, 1);
@@ -116,9 +116,9 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
             }
 
             if (message.serverContent?.outputTranscription) {
-              updateIncrementalTranscript('AI', message.serverContent.outputTranscription.text);
+              updateIncrementalTranscript('AI', message.serverContent.outputTranscription.text ?? '');
             } else if (message.serverContent?.inputTranscription) {
-              updateIncrementalTranscript('Interviewee', message.serverContent.inputTranscription.text);
+              updateIncrementalTranscript('Interviewee', message.serverContent.inputTranscription.text ?? '');
             }
 
             if (message.serverContent?.turnComplete) {
