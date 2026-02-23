@@ -57,19 +57,27 @@ jobs:
           cp package-lock.json deploy/package-lock.json
 
       - name: Preflight secret checks
+        id: preflight
         shell: bash
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
           set -euo pipefail
-          if [[ -n "${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}" ]]; then
+          if [[ -n "${PUBLISH_PROFILE}" ]]; then
             echo "Deploy mode: publish-profile"
+            echo "deploy_mode=publish_profile" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          [[ -n "${{ secrets.AZURE_CLIENT_ID }}" ]] || { echo "Missing AZURE_CLIENT_ID"; exit 1; }
-          [[ -n "${{ secrets.AZURE_TENANT_ID }}" ]] || { echo "Missing AZURE_TENANT_ID"; exit 1; }
-          [[ -n "${{ secrets.AZURE_SUBSCRIPTION_ID }}" ]] || { echo "Missing AZURE_SUBSCRIPTION_ID"; exit 1; }
+          [[ -n "${AZURE_CLIENT_ID}" ]] || { echo "Missing AZURE_CLIENT_ID"; exit 1; }
+          [[ -n "${AZURE_TENANT_ID}" ]] || { echo "Missing AZURE_TENANT_ID"; exit 1; }
+          [[ -n "${AZURE_SUBSCRIPTION_ID}" ]] || { echo "Missing AZURE_SUBSCRIPTION_ID"; exit 1; }
+          echo "deploy_mode=oidc" >> "$GITHUB_OUTPUT"
 
       - name: Azure login (OIDC)
-        if: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE == '' }}
+        if: ${{ steps.preflight.outputs.deploy_mode == 'oidc' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -77,7 +85,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy to Azure Web App (Publish Profile)
-        if: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE != '' }}
+        if: ${{ steps.preflight.outputs.deploy_mode == 'publish_profile' }}
         uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
@@ -85,7 +93,7 @@ jobs:
           package: deploy
 
       - name: Deploy to Azure Web App (OIDC)
-        if: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE == '' }}
+        if: ${{ steps.preflight.outputs.deploy_mode == 'oidc' }}
         uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
@@ -108,6 +116,7 @@ jobs:
               cat /tmp/health_response.json
               exit 0
             fi
+            echo "Health check attempt ${i}/10 failed; retrying in 15s..."
             sleep 15
           done
           exit 1
