@@ -1,5 +1,6 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -29,6 +30,24 @@ const foundryEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
 const foundryApiKey = process.env.AZURE_OPENAI_API_KEY;
 const foundryDeployment = process.env.AZURE_OPENAI_DEPLOYMENT;
 const foundryApiVersion = process.env.AZURE_OPENAI_API_VERSION || "2024-10-21";
+const canonicalSpecPath = path.join(__dirname, "docs", "knowledge", "core", "NP_CANONICAL_SPEC.md");
+
+const fallbackCanonicalPolicy = `
+- Keep interview targets singular and concrete.
+- Prioritize experiential process (how) over theory (why).
+- Preserve participant agency and reversible consent.
+- Use diachronic and synchronic analysis structure.
+- Avoid speculation when transcript evidence is sparse.
+`.trim();
+
+const canonicalPolicy = (() => {
+  try {
+    const value = fs.readFileSync(canonicalSpecPath, "utf8").trim();
+    return value.length > 0 ? value : fallbackCanonicalPolicy;
+  } catch {
+    return fallbackCanonicalPolicy;
+  }
+})();
 
 const analysisSchema = {
   type: "object",
@@ -131,6 +150,9 @@ QUALITY BAR:
 - Do not invent details absent from transcript.
 - Keep terms operational and coder-friendly.
 - If evidence is sparse, describe uncertainty conservatively.
+
+CANONICAL POLICY BASELINE:
+${canonicalPolicy}
 
 INPUT TRANSCRIPT:
 ${transcriptText}`;

@@ -40,6 +40,7 @@ const App: React.FC = () => {
     language: LanguagePreference.UK,
     voiceGender: VoiceGender.FEMALE,
     privacyContract: true,
+    increasedSensitivityMode: false,
     interviewMode: InterviewMode.BEGINNER,
     persistLocalData: false
   });

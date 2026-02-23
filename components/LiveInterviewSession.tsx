@@ -76,7 +76,12 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
 
   const startSession = async () => {
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      if (!settings.apiKey) {
+        setError("Missing Gemini API Key");
+        return;
+      }
+
+      const ai = new GoogleGenAI({ apiKey: settings.apiKey });
       const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       audioContextRef.current = outputAudioContext;
@@ -133,7 +138,12 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
           outputAudioTranscription: {},
           inputAudioTranscription: {},
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
-          systemInstruction: NEURO_PHENOM_SYSTEM_INSTRUCTION(settings.language, settings.interviewMode, settings.privacyContract)
+          systemInstruction: NEURO_PHENOM_SYSTEM_INSTRUCTION(
+            settings.language,
+            settings.interviewMode,
+            settings.privacyContract,
+            settings.increasedSensitivityMode
+          )
         },
       });
       sessionRef.current = await sessionPromise;

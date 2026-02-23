@@ -43,9 +43,10 @@ jobs:
       - name: Prepare deploy folder
         run: |
           rm -rf deploy
-          mkdir -p deploy
+          mkdir -p deploy/docs/knowledge
           cp -R dist deploy/dist
           cp -R node_modules deploy/node_modules
+          cp -R docs/knowledge/core deploy/docs/knowledge/core
           cp server.js deploy/server.js
           cp package.json deploy/package.json
           cp package-lock.json deploy/package-lock.json
@@ -61,6 +62,33 @@ jobs:
     needs: build
 
     steps:
+      - name: Preflight secret checks
+        id: preflight
+        shell: bash
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${AZURE_WEBAPP_NAME:-}" ]]; then
+            echo "AZURE_WEBAPP_NAME is empty."
+            exit 1
+          fi
+
+          if [[ -n "${PUBLISH_PROFILE}" ]]; then
+            echo "Deploy mode: publish-profile"
+            echo "deploy_mode=publish_profile" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Deploy mode: OIDC"
+          [[ -n "${AZURE_CLIENT_ID}" ]] || { echo "Missing AZURE_CLIENT_ID"; exit 1; }
+          [[ -n "${AZURE_TENANT_ID}" ]] || { echo "Missing AZURE_TENANT_ID"; exit 1; }
+          [[ -n "${AZURE_SUBSCRIPTION_ID}" ]] || { echo "Missing AZURE_SUBSCRIPTION_ID"; exit 1; }
+          echo "deploy_mode=oidc" >> "$GITHUB_OUTPUT"
+
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
@@ -68,14 +96,48 @@ jobs:
           path: .
 
       - name: Azure login (OIDC)
+        if: ${{ steps.preflight.outputs.deploy_mode == 'oidc' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Deploy to Azure Web App
+      - name: Deploy to Azure Web App (Publish Profile)
+        if: ${{ steps.preflight.outputs.deploy_mode == 'publish_profile' }}
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: .
+
+      - name: Deploy to Azure Web App (OIDC)
+        if: ${{ steps.preflight.outputs.deploy_mode == 'oidc' }}
         uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: .
+
+      - name: Post-deploy health check
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${{ vars.AZURE_WEBAPP_HEALTHCHECK_URL }}" ]]; then
+            HEALTHCHECK_URL="${{ vars.AZURE_WEBAPP_HEALTHCHECK_URL }}"
+          else
+            HEALTHCHECK_URL="https://${AZURE_WEBAPP_NAME}.azurewebsites.net/api/health"
+          fi
+
+          echo "Checking ${HEALTHCHECK_URL}"
+          for i in {1..10}; do
+            if curl --silent --show-error --fail --max-time 20 "${HEALTHCHECK_URL}" > /tmp/health_response.json; then
+              echo "Health check passed."
+              cat /tmp/health_response.json
+              exit 0
+            fi
+            echo "Health check attempt ${i}/10 failed; retrying in 15s..."
+            sleep 15
+          done
+
+          echo "Health check failed after retries."
+          exit 1
