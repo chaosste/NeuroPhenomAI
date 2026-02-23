@@ -46,12 +46,12 @@ This avoids hostname guessing in CI.
 
 ## 5) Fast rollback
 
-Use **Actions -> Build and deploy Node app to Azure Web App -> Run workflow** and set:
+Use **Actions -> Rollback Azure Web App -> Run workflow** and set:
 
-- `ref`: previous known-good commit SHA or tag
+- `ref`: previous known-good commit SHA/tag/branch
 - optional `healthcheck_url`: explicit URL if needed
 
-This redeploys a known-good revision without waiting for new code changes.
+This redeploys a known-good revision without new code changes.
 
 ## 6) Troubleshooting
 
