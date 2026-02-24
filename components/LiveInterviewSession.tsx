@@ -16,6 +16,13 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
   const [isActive, setIsActive] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState<{ speaker: 'AI' | 'Interviewee', text: string, id: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState({
+    key: 'unknown',
+    mic: 'unknown',
+    network: 'unknown',
+    session: 'idle',
+    message: 'Ready to connect.'
+  });
   
   const sessionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -79,12 +86,32 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
     try {
       if (!settings.apiKey) {
         setError("Missing Gemini API Key");
+        setDiagnostics({
+          key: 'fail',
+          mic: 'unknown',
+          network: 'unknown',
+          session: 'error',
+          message: 'Missing Gemini API key. Add it in settings.'
+        });
         return;
       }
+      setDiagnostics({
+        key: 'ok',
+        mic: 'checking',
+        network: 'checking',
+        session: 'connecting',
+        message: 'API key found. Requesting microphone access...'
+      });
 
       if (connectTimeoutRef.current) window.clearTimeout(connectTimeoutRef.current);
       connectTimeoutRef.current = window.setTimeout(() => {
         setError("Connection timeout. Check Gemini API key, mic permission, or network.");
+        setDiagnostics((prev) => ({
+          ...prev,
+          network: 'fail',
+          session: 'error',
+          message: 'Connection timeout. Check network/API key and retry.'
+        }));
       }, 15000);
 
       const ai = new GoogleGenAI({ apiKey: settings.apiKey });
@@ -93,6 +120,11 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
       audioContextRef.current = outputAudioContext;
       sessionStartTimeRef.current = Date.now();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setDiagnostics((prev) => ({
+        ...prev,
+        mic: 'ok',
+        message: 'Microphone ready. Opening live model connection...'
+      }));
       const outputNode = outputAudioContext.createGain();
       outputNode.connect(outputAudioContext.destination);
 
@@ -109,6 +141,13 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
               connectTimeoutRef.current = null;
             }
             setIsActive(true);
+            setDiagnostics({
+              key: 'ok',
+              mic: 'ok',
+              network: 'ok',
+              session: 'live',
+              message: 'Live session connected.'
+            });
             const source = inputAudioContext.createMediaStreamSource(stream);
             const scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
             scriptProcessor.onaudioprocess = (e) => {
@@ -143,8 +182,19 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
           onerror: (e) => {
             const detail = typeof (e as any)?.message === 'string' ? (e as any).message : 'Unknown transport error';
             setError(`Link interrupt: ${detail}`);
+            const lowered = detail.toLowerCase();
+            if (lowered.includes('key') || lowered.includes('auth') || lowered.includes('permission')) {
+              setDiagnostics((prev) => ({ ...prev, key: 'fail', session: 'error', message: 'API key invalid or unauthorized.' }));
+            } else {
+              setDiagnostics((prev) => ({ ...prev, network: 'fail', session: 'error', message: 'Network/session link interrupted.' }));
+            }
           },
-          onclose: () => setIsActive(false),
+          onclose: () => {
+            setIsActive(false);
+            setDiagnostics((prev) => prev.session === 'error'
+              ? prev
+              : { ...prev, session: 'closed', message: 'Session closed.' });
+          },
         },
         config: {
           responseModalities: [Modality.AUDIO],
@@ -162,6 +212,12 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
       sessionRef.current = await sessionPromise;
     } catch (err) {
       setError("Microphone hardware error or blocked permission.");
+      setDiagnostics((prev) => ({
+        ...prev,
+        mic: 'fail',
+        session: 'error',
+        message: 'Microphone access blocked or unavailable.'
+      }));
     }
   };
 
@@ -222,6 +278,15 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
       </div>
 
       <div className="flex-1 flex flex-col relative overflow-hidden bg-[#fafafa]">
+        <div className="mx-8 mt-6 rounded-xl border border-black/10 bg-white px-4 py-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] font-bold uppercase tracking-wider">
+            <span>Key: <strong>{String(diagnostics.key)}</strong></span>
+            <span>Mic: <strong>{String(diagnostics.mic)}</strong></span>
+            <span>Network: <strong>{String(diagnostics.network)}</strong></span>
+            <span>Session: <strong>{String(diagnostics.session)}</strong></span>
+          </div>
+          <p className="mt-2 text-[11px] text-neutral-600">{diagnostics.message}</p>
+        </div>
         {!isActive && !error && (
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center animate-in fade-in duration-700">
             <div className="relative mb-16">
