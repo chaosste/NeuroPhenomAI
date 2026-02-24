@@ -30,6 +30,7 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
   const nextStartTimeRef = useRef<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sessionStartTimeRef = useRef<number>(0);
+  const connectTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -81,6 +82,11 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
         return;
       }
 
+      if (connectTimeoutRef.current) window.clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = window.setTimeout(() => {
+        setError("Connection timeout. Check Gemini API key, mic permission, or network.");
+      }, 15000);
+
       const ai = new GoogleGenAI({ apiKey: settings.apiKey });
       const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -98,6 +104,10 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         callbacks: {
           onopen: () => {
+            if (connectTimeoutRef.current) {
+              window.clearTimeout(connectTimeoutRef.current);
+              connectTimeoutRef.current = null;
+            }
             setIsActive(true);
             const source = inputAudioContext.createMediaStreamSource(stream);
             const scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
@@ -130,7 +140,10 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
               finalizeTurn();
             }
           },
-          onerror: (e) => setError("Link Interrupt"),
+          onerror: (e) => {
+            const detail = typeof (e as any)?.message === 'string' ? (e as any).message : 'Unknown transport error';
+            setError(`Link interrupt: ${detail}`);
+          },
           onclose: () => setIsActive(false),
         },
         config: {
@@ -147,7 +160,9 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
         },
       });
       sessionRef.current = await sessionPromise;
-    } catch (err) { setError("Microphone Hardware Error"); }
+    } catch (err) {
+      setError("Microphone hardware error or blocked permission.");
+    }
   };
 
   const updateIncrementalTranscript = (speaker: 'AI' | 'Interviewee', text: string) => {
@@ -177,6 +192,10 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
 
   const endSession = () => {
     finalizeTurn();
+    if (connectTimeoutRef.current) {
+      window.clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
     if (sessionRef.current) sessionRef.current.close();
     onComplete(transcriptHistoryRef.current);
   };
