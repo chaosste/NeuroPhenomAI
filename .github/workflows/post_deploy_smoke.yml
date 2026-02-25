@@ -29,7 +29,7 @@ jobs:
           for i in {1..20}; do
             if curl -sS --max-time 20 "$AZURE_HEALTH_URL" > /tmp/azure_health.json; then
               cat /tmp/azure_health.json
-              if rg -q "$EXPECTED_SUBSTRING" /tmp/azure_health.json; then
+              if grep -Fq "$EXPECTED_SUBSTRING" /tmp/azure_health.json; then
                 echo "Azure default host health is valid."
                 break
               fi
@@ -49,7 +49,7 @@ jobs:
           for i in {1..20}; do
             if curl -sS --max-time 20 "$CUSTOM_HEALTH_URL" > /tmp/custom_health.json; then
               cat /tmp/custom_health.json
-              if rg -q "$EXPECTED_SUBSTRING" /tmp/custom_health.json; then
+              if grep -Fq "$EXPECTED_SUBSTRING" /tmp/custom_health.json; then
                 echo "Custom domain health is valid."
                 exit 0
               fi
