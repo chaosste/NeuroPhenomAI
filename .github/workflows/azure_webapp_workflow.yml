@@ -68,36 +68,19 @@ jobs:
           name: node-app
           path: .
 
-      - name: Validate deploy credentials
+      - name: Validate publish profile secret
         shell: bash
         run: |
           set -euo pipefail
-          [[ -n "${{ secrets.AZURE_WEBAPP_DEPLOY_USERNAME }}" ]] || { echo "Missing AZURE_WEBAPP_DEPLOY_USERNAME"; exit 1; }
-          [[ -n "${{ secrets.AZURE_WEBAPP_DEPLOY_PASSWORD }}" ]] || { echo "Missing AZURE_WEBAPP_DEPLOY_PASSWORD"; exit 1; }
+          [[ -n "${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}" ]] || { echo "Missing AZURE_WEBAPP_PUBLISH_PROFILE"; exit 1; }
           [[ -n "${AZURE_WEBAPP_NAME:-}" ]] || { echo "AZURE_WEBAPP_NAME is empty"; exit 1; }
 
-      - name: Zip deploy package
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -f deploy.zip
-          zip -r deploy.zip .
-
-      - name: Deploy to Azure Web App (zipdeploy)
-        shell: bash
-        env:
-          DEPLOY_USER: ${{ secrets.AZURE_WEBAPP_DEPLOY_USERNAME }}
-          DEPLOY_PASS: ${{ secrets.AZURE_WEBAPP_DEPLOY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          DEPLOY_URL="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net/api/zipdeploy"
-          echo "Deploying to ${DEPLOY_URL}"
-          curl --silent --show-error --fail \
-            -u "${DEPLOY_USER}:${DEPLOY_PASS}" \
-            -X POST \
-            -H "Content-Type: application/zip" \
-            --data-binary @deploy.zip \
-            "${DEPLOY_URL}"
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: .
 
       - name: Post-deploy health check
         shell: bash
