@@ -42,6 +42,15 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
   const connectTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
+    return () => {
+      if (connectTimeoutRef.current) {
+        window.clearTimeout(connectTimeoutRef.current);
+        connectTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
@@ -85,11 +94,11 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
   };
 
   const mapAzureVoice = () => {
-    if (settings.voiceGender === VoiceGender.MALE) return "alloy";
     return "verse";
   };
 
   const startAzureRealtimeSession = async () => {
+    sessionStartTimeRef.current = Date.now();
     setDiagnostics({
       key: 'checking',
       mic: 'checking',
@@ -140,6 +149,10 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
               : { ...prev, session: 'closed', message: 'Session closed.' });
           },
           onError: (message) => {
+            if (connectTimeoutRef.current) {
+              window.clearTimeout(connectTimeoutRef.current);
+              connectTimeoutRef.current = null;
+            }
             const lowered = message.toLowerCase();
             setError(message);
             if (lowered.includes('key') || lowered.includes('token') || lowered.includes('realtime is not configured')) {
@@ -165,6 +178,10 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, o
 
       sessionRef.current = handle;
     } catch (err) {
+      if (connectTimeoutRef.current) {
+        window.clearTimeout(connectTimeoutRef.current);
+        connectTimeoutRef.current = null;
+      }
       const message = err instanceof Error ? err.message : 'Azure Realtime session failed.';
       setError(message);
       const lowered = message.toLowerCase();

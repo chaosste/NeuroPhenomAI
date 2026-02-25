@@ -16,11 +16,34 @@ interface TokenResponse {
   callsUrl: string;
 }
 
+const buildPreferredAudioConstraints = (): MediaTrackConstraints => ({
+  channelCount: { ideal: 1 },
+  sampleRate: { ideal: 48000 },
+  sampleSize: { ideal: 16 },
+  echoCancellation: false,
+  noiseSuppression: false,
+  autoGainControl: false
+});
+
 const readEventText = (event: any): string => {
   if (typeof event?.transcript === "string") return event.transcript;
   if (typeof event?.delta === "string") return event.delta;
   if (typeof event?.text === "string") return event.text;
   return "";
+};
+
+const resolveBrowserCallsUrl = (rawUrl: string): string => {
+  const ua = navigator.userAgent || "";
+  const isFirefox = /firefox/i.test(ua);
+  if (!isFirefox) return rawUrl;
+
+  try {
+    const url = new URL(rawUrl, window.location.origin);
+    url.searchParams.delete("webrtcfilter");
+    return url.toString();
+  } catch {
+    return rawUrl.replace(/[?&]webrtcfilter=on\b/, "");
+  }
 };
 
 export const connectAzureRealtimeSession = async (
@@ -43,19 +66,91 @@ export const connectAzureRealtimeSession = async (
     throw new Error(tokenData.error || "Failed to initialize Azure Realtime session.");
   }
 
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: buildPreferredAudioConstraints()
+  });
+  const [audioTrack] = stream.getAudioTracks();
+  if (audioTrack) {
+    try {
+      await audioTrack.applyConstraints(buildPreferredAudioConstraints());
+    } catch {}
+  }
   const connection = new RTCPeerConnection();
   const remoteAudio = new Audio();
   remoteAudio.autoplay = true;
+  remoteAudio.setAttribute('playsinline', 'true');
+  let isClosed = false;
+  let dataChannel: RTCDataChannel | null = null;
+  let disconnectTimer: number | null = null;
+
+  const closeSession = () => {
+    if (isClosed) return;
+    isClosed = true;
+    if (disconnectTimer) {
+      window.clearTimeout(disconnectTimer);
+      disconnectTimer = null;
+    }
+    try {
+      dataChannel?.close();
+    } catch {}
+    stream.getTracks().forEach((track) => track.stop());
+    connection.getSenders().forEach((sender) => sender.track?.stop());
+    connection.close();
+    callbacks.onClose();
+  };
 
   stream.getTracks().forEach((track) => connection.addTrack(track, stream));
   connection.ontrack = (event) => {
     const [remoteStream] = event.streams;
-    if (remoteStream) remoteAudio.srcObject = remoteStream;
+    if (remoteStream) {
+      remoteAudio.srcObject = remoteStream;
+      remoteAudio.play().catch(() => {
+        callbacks.onError("Remote audio playback was blocked by browser autoplay policy.");
+      });
+    }
+  };
+  connection.onconnectionstatechange = () => {
+    if (connection.connectionState === "connected" && disconnectTimer) {
+      window.clearTimeout(disconnectTimer);
+      disconnectTimer = null;
+    }
+    if (connection.connectionState === "failed") {
+      callbacks.onError("Realtime peer connection failed.");
+      closeSession();
+    }
+    if (connection.connectionState === "disconnected" && !disconnectTimer) {
+      disconnectTimer = window.setTimeout(() => {
+        disconnectTimer = null;
+        if (connection.connectionState === "disconnected") {
+          callbacks.onError("Realtime peer connection disconnected.");
+          closeSession();
+        }
+      }, 5000);
+    }
+    if (connection.connectionState === "closed") {
+      closeSession();
+    }
+  };
+  connection.oniceconnectionstatechange = () => {
+    if (connection.iceConnectionState === "failed") {
+      callbacks.onError("Realtime ICE negotiation failed.");
+    }
   };
 
-  const dataChannel = connection.createDataChannel("realtime-events");
+  dataChannel = connection.createDataChannel("realtime-events");
   dataChannel.onopen = () => {
+    dataChannel.send(
+      JSON.stringify({
+        type: "session.update",
+        session: {
+          instructions,
+          modalities: ["audio", "text"],
+          turn_detection: { type: "server_vad" },
+          input_audio_transcription: {},
+          output_audio_transcription: {}
+        }
+      })
+    );
     callbacks.onOpen();
     dataChannel.send(
       JSON.stringify({
@@ -97,11 +192,12 @@ export const connectAzureRealtimeSession = async (
     }
   };
   dataChannel.onerror = () => callbacks.onError("Realtime data channel error.");
-  dataChannel.onclose = () => callbacks.onClose();
+  dataChannel.onclose = () => closeSession();
 
   const offer = await connection.createOffer();
   await connection.setLocalDescription(offer);
-  const sdpResponse = await fetch(tokenData.callsUrl, {
+  const callsUrl = resolveBrowserCallsUrl(tokenData.callsUrl);
+  const sdpResponse = await fetch(callsUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${tokenData.token}`,
@@ -121,14 +217,6 @@ export const connectAzureRealtimeSession = async (
   });
 
   return {
-    close: () => {
-      try {
-        dataChannel.close();
-      } catch {}
-      stream.getTracks().forEach((track) => track.stop());
-      connection.getSenders().forEach((sender) => sender.track?.stop());
-      connection.close();
-      callbacks.onClose();
-    }
+    close: () => closeSession()
   };
 };
