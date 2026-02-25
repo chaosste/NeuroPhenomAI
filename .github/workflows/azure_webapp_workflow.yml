@@ -43,9 +43,10 @@ jobs:
       - name: Prepare deploy folder
         run: |
           rm -rf deploy
-          mkdir -p deploy
+          mkdir -p deploy/docs/knowledge
           cp -R dist deploy/dist
           cp -R node_modules deploy/node_modules
+          cp -R docs/knowledge/core deploy/docs/knowledge/core
           cp server.js deploy/server.js
           cp package.json deploy/package.json
           cp package-lock.json deploy/package-lock.json
