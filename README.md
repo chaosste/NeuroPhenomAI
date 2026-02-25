@@ -64,7 +64,7 @@ npm run dev
 
 ## Related Projects
 
-> 💡 **Like NeuroPhenom AI? You'll love [MicroPhenom AI](https://github.com/chaosste/MicroPhenom-AI-1)** — the vanilla edition for granular reports on wider lived experience.
+> 💡 **Like NeuroPhenom AI? You'll love [MicroPhenom AI](https://github.com/chaosste/MicroPhenom-AI)** — the vanilla edition for granular reports on wider lived experience.
 
 > 𓂀 For psychedelic trip report interviews with theatrical deity-themed voices, see [Anubis](https://github.com/chaosste/Anubis).
 

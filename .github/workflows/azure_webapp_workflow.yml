@@ -11,7 +11,7 @@ permissions:
   id-token: write
 
 env:
-  AZURE_WEBAPP_NAME: neurophenom
+  AZURE_WEBAPP_NAME: neurophenom-finesse
   NODE_VERSION: "22.x"
 
 jobs:
@@ -62,60 +62,17 @@ jobs:
     needs: build
 
     steps:
-      - name: Preflight secret checks
-        id: preflight
-        shell: bash
-        env:
-          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${AZURE_WEBAPP_NAME:-}" ]]; then
-            echo "AZURE_WEBAPP_NAME is empty."
-            exit 1
-          fi
-
-          if [[ -n "${PUBLISH_PROFILE}" ]]; then
-            echo "Deploy mode: publish-profile"
-            echo "deploy_mode=publish_profile" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "Deploy mode: OIDC"
-          [[ -n "${AZURE_CLIENT_ID}" ]] || { echo "Missing AZURE_CLIENT_ID"; exit 1; }
-          [[ -n "${AZURE_TENANT_ID}" ]] || { echo "Missing AZURE_TENANT_ID"; exit 1; }
-          [[ -n "${AZURE_SUBSCRIPTION_ID}" ]] || { echo "Missing AZURE_SUBSCRIPTION_ID"; exit 1; }
-          echo "deploy_mode=oidc" >> "$GITHUB_OUTPUT"
-
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: node-app
           path: .
 
-      - name: Azure login (OIDC)
-        if: ${{ steps.preflight.outputs.deploy_mode == 'oidc' }}
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Deploy to Azure Web App (Publish Profile)
-        if: ${{ steps.preflight.outputs.deploy_mode == 'publish_profile' }}
+      - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: .
-
-      - name: Deploy to Azure Web App (OIDC)
-        if: ${{ steps.preflight.outputs.deploy_mode == 'oidc' }}
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: .
 
       - name: Post-deploy health check
