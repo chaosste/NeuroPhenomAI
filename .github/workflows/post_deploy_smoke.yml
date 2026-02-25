@@ -1,0 +1,63 @@
+name: Post Deploy Smoke Test
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Build and deploy Node app to Azure Web App
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+env:
+  AZURE_HEALTH_URL: https://neurophenom-finesse.azurewebsites.net/api/health
+  CUSTOM_HEALTH_URL: https://www.neurophenomai.newpsychonaut.com/api/health
+  EXPECTED_SUBSTRING: '"ok":true'
+
+jobs:
+  smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check Azure default host health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..20}; do
+            if curl -sS --max-time 20 "$AZURE_HEALTH_URL" > /tmp/azure_health.json; then
+              cat /tmp/azure_health.json
+              if rg -q "$EXPECTED_SUBSTRING" /tmp/azure_health.json; then
+                echo "Azure default host health is valid."
+                break
+              fi
+              echo "Expected marker missing from Azure health payload."
+            fi
+            if [[ "$i" -eq 20 ]]; then
+              echo "Azure default host health check failed."
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Check custom domain health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..20}; do
+            if curl -sS --max-time 20 "$CUSTOM_HEALTH_URL" > /tmp/custom_health.json; then
+              cat /tmp/custom_health.json
+              if rg -q "$EXPECTED_SUBSTRING" /tmp/custom_health.json; then
+                echo "Custom domain health is valid."
+                exit 0
+              fi
+              echo "Expected marker missing from custom-domain health payload."
+            fi
+            if [[ "$i" -eq 20 ]]; then
+              echo "Custom domain health check failed."
+              exit 1
+            fi
+            sleep 10
+          done
