@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Settings, LanguagePreference, VoiceGender, InterviewMode } from '../types';
-import { MoreVertical, Languages, Volume2, Shield, Settings2, Coffee, Key, Database, Download, Upload } from 'lucide-react';
+import { MoreVertical, Languages, Volume2, Shield, Settings2, Coffee, Key, Database, Download, Upload, HeartHandshake } from 'lucide-react';
 
 interface SettingsMenuProps {
   settings: Settings;
@@ -94,6 +94,23 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({
                 className="sr-only peer" 
                 checked={settings.privacyContract}
                 onChange={(e) => toggleSetting('privacyContract', e.target.checked)}
+              />
+              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+
+          <div className="px-4 py-2.5 flex items-center gap-3">
+            <HeartHandshake size={18} className="text-slate-400" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-slate-700">Increased Sensitivity Mode</p>
+              <p className="text-xs text-slate-500">Slower pacing, gentler probes</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={settings.increasedSensitivityMode}
+                onChange={(e) => toggleSetting('increasedSensitivityMode', e.target.checked)}
               />
               <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
             </label>

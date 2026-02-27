@@ -1,5 +1,6 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -36,6 +37,24 @@ const foundryEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
 const foundryApiKey = process.env.AZURE_OPENAI_API_KEY;
 const foundryDeployment = process.env.AZURE_OPENAI_DEPLOYMENT;
 const foundryApiVersion = process.env.AZURE_OPENAI_API_VERSION || "2024-10-21";
+const canonicalSpecPath = path.join(__dirname, "docs", "knowledge", "core", "NP_CANONICAL_SPEC.md");
+
+const fallbackCanonicalPolicy = `
+- Keep interview targets singular and concrete.
+- Prioritize experiential process (how) over theory (why).
+- Preserve participant agency and reversible consent.
+- Use diachronic and synchronic analysis structure.
+- Avoid speculation when transcript evidence is sparse.
+`.trim();
+
+const canonicalPolicy = (() => {
+  try {
+    const value = fs.readFileSync(canonicalSpecPath, "utf8").trim();
+    return value.length > 0 ? value : fallbackCanonicalPolicy;
+  } catch {
+    return fallbackCanonicalPolicy;
+  }
+})();
 
 const analysisSchema = {
   type: "object",
@@ -45,6 +64,19 @@ const analysisSchema = {
     takeaways: { type: "array", items: { type: "string" } },
     modalities: { type: "array", items: { type: "string" } },
     phasesCount: { type: "integer" },
+    codebookSuggestions: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          label: { type: "string" },
+          rationale: { type: "string" },
+          exemplarQuote: { type: "string" }
+        },
+        required: ["label", "rationale", "exemplarQuote"]
+      }
+    },
     diachronicStructure: {
       type: "array",
       items: {
@@ -104,12 +136,32 @@ const buildAnalysisPrompt = (transcriptText, language) => {
   const locale = normalizeLanguage(language);
   return `Analyze the interview transcript as a neurophenomenology session. Use ${locale} English.
 
-MANDATORY TASKS:
-1. DIARIZATION: Label turns as Interviewer, Interviewee, or AI.
-2. PHENOMENOLOGY: Map diachronic unfolding and synchronic structure.
-3. MODALITIES: Extract sensory modalities (visual, auditory, tactile, interoceptive, etc.).
+METHOD CONSTRAINTS (MICRO-PHENOMENOLOGY):
+1. Prioritize experiential process ("how") over theory, interpretation, or causal explanation ("why").
+2. Distinguish concrete evocation from abstraction. Treat vague labels as lower-quality evidence.
+3. Preserve participant agency and privacy-sensitive framing.
+4. Track both:
+   - Diachronic unfolding (how experience transforms over time)
+   - Synchronic structure (how dimensions co-occur within a given moment)
 
-INPUT:
+OUTPUT REQUIREMENTS:
+1. DIARIZATION: Label turns only as Interviewer, Interviewee, or AI.
+2. SUMMARY: High-fidelity synthesis of lived-process dynamics.
+3. TAKEAWAYS: Research-relevant points grounded in transcript evidence.
+4. MODALITIES: Sensory/affective/cognitive/interoceptive modalities explicitly present in data.
+5. CODEBOOK SUGGESTIONS: 4-8 coding labels, each with rationale + one exemplar quote.
+6. DIACHRONIC STRUCTURE: Sequential experiential phases with concise descriptions.
+7. SYNCHRONIC STRUCTURE: Structural dimensions active within moments (attention, embodiment, agency, temporality, affective tone, etc.).
+
+QUALITY BAR:
+- Do not invent details absent from transcript.
+- Keep terms operational and coder-friendly.
+- If evidence is sparse, describe uncertainty conservatively.
+
+CANONICAL POLICY BASELINE:
+${canonicalPolicy}
+
+INPUT TRANSCRIPT:
 ${transcriptText}`;
 };
 
@@ -172,8 +224,10 @@ const callFoundryChatCompletions = async (messages, useStructuredOutput) => {
 };
 
 app.get("/api/health", (_req, res) => {
+  res.set("Cache-Control", "no-store, max-age=0");
   res.json({
     ok: true,
+    service: "neurophenomai",
     foundryConfigured: isFoundryConfigured()
   });
 });
@@ -202,6 +256,7 @@ app.post("/api/welcome", welcomeRateLimiter, jsonParser, async (req, res) => {
 
   try {
     const data = await callFoundryChatCompletions(messages, false);
+    res.set("Cache-Control", "no-store, max-age=0");
     res.json({
       text:
         getFirstMessageContent(data) ||
@@ -264,6 +319,7 @@ app.post("/api/analyze", analysisRateLimiter, jsonParser, async (req, res) => {
       return;
     }
 
+    res.set("Cache-Control", "no-store, max-age=0");
     res.json(parsed);
   } catch (error) {
     res.status(502).json({

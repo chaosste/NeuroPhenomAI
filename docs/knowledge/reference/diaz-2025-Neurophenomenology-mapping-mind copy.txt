@@ -1,0 +1,227 @@
+10Neurophenomenology
+Mapping Structures of the Mind
+Frank M. Diaz
+Introduction
+Researchers gather both subjective and objective information in neurophenome-
+nology to study and understand the mind (Varela, 1996). For instance, a researcher 
+interested in how the brain processes pitch and rhythm might design a study in 
+which neuroimaging data is collected during an experimental music listening task. 
+Typically, these types of experiments focus on gathering what is known as third- 
+person or “objective” data, which may include measurements such as electroenceph-
+alogram (EEG) or functional magnetic resonance imaging (fMRI). However, for 
+the neurophenomenologist, the study of subjectivity or first-person experience is a 
+necessary aspect of understanding the mind. Therefore, in addition to third-person 
+measurements, the researcher might also ask participants to report on their mental 
+state before, during, or after listening to the excerpts, and then use this information 
+to determine if and how it might relate to variations in the neuroimaging data.
+Typically, neurophenomenologists look for patterns in experience that are consist-
+ent within and between participants. In the proposed example, the researcher might 
+discover that some participants feel consistently distracted before listening to the 
+excerpts, while others feel focused and prepared. Based on these observations, the 
+researcher may decide to determine how neural measures vary based on the excerpts 
+and how groupings of “prepared” and “distracted” participants might affect these 
+outcomes. For the neurophenomenologist, data generated from first-person accounts 
+inform how and what we study from a third-person perspective. Additionally, in order 
+to provide a nuanced and fuller account of the mind, neurophenomenologists suggest 
+that third-person observations must bear some meaningful relationship to first-person 
+experience. This process of mutual constraint, aimed at bridging information gained 
+from qualitative and quantitative approaches to studying the mind, is one of the defin-
+ing characteristics of neurophenomenology.
+First-Person Methods
+Similar to qualitative methodologies such as grounded theory and case studies, neu-
+rophenomenology is concerned with understanding first-person accounts of lived 
+experience. Neurophenomenologists, however, put a greater emphasis on the struc-
+tures rather than the objects of experience, under the assumption that structural 
+processes are good candidates for identifying bridges between first- and third-person 
+observations of the mind (Lutz & Thompson, 2003). This means, for instance, that a 
+person’s sense of intention, emotional state, and other similar first-person dynamics 
+might be good candidates for identifying meaningful patterns of coherence between 
+DOI: 10.4324/97810 03153924 -12
+Neurophenomenology: Mapping Structures of the Mind 115
+subjectivity, brain activity, and behavior. Within neurophenomenology, processes 
+that appear consistently both within and between participants are known as phe-
+nomenal invariants, a concept borrowed from both Western and Asian phenomeno-
+logical traditions centered on “mapping” structures of the mind through disciplined 
+introspection (Roy, Petitot, Pachoud, & Varela, 1999; Wallace, 1999). This process 
+of classifying experiential phenomena in a manner complementary with the natural 
+sciences is referred to as naturalization.
+Ostensibly, phenomenal invariants greatly color how we experience the world, 
+making them relevant to our study of minds. Furthermore, philosophers from the 
+enactivist tradition suggest that invariants appear to us forms shaped by complex 
+interactions between our brains, bodies, and environment (Varela, Thompson, & 
+Rosch, 2017). This means that there is no “world out there” that can be appre-
+hended independently from these limitations on our experience. In traditions such as 
+phenomenology, psychotherapy, and mindfulness meditation, phenomenal invari-
+ants can be identified through disciplined introspection. Generally, this process may 
+occur through the suspension of habitual thoughts, freeing the mind to redirect 
+attention and become receptive to the emergence of novel features of experience 
+(Lutz & Thompson, 2003).
+Several studies suggest that phenomenal invariants can indeed be identified, and 
+that these structures relate to third-person observations of brain activity and behav-
+ior (Diaz, Silveira, & Strand, 2020; Lutz & Thompson, 2003). For instance, in a 
+seminal study on visual processing, a pair of researchers trained participants to 
+notice their thoughts and feelings before, during, and after engaging in an exper-
+imental task that involved pressing a button upon detecting a three-dimensional  
+object (Lutz & Thompson, 2003). Through examining participants’ verbal responses, 
+the researchers noticed that participants tended to feel either well-prepared for  
+(steady readiness), moderately prepared (fragmented readiness), or somewhat sur-
+prised (unreadiness) upon detection of the object. These phenomenal invariants 
+later proved to be associated with distinct patterns of neural activity during visual 
+detection.
+In the vision study, the processes of suspension and redirection were enacted by 
+informing participants that they were to focus not only on the appearance of the 
+object (suspension), but also on the feelings and thoughts arising before and upon 
+its detection (redirection). Through this enhanced awareness, participants were 
+able to identify distinct patterns of experience associated with detecting the visual 
+object (receptivity). These patterns were then used to group participants based on 
+the phenomenological clusters of steady, fragmented, and unreadiness, in order 
+to better understand variations in the neural patterns. In contrast, a purely third- 
+person account of this phenomenon might have possibly omitted these group-based 
+differences or created groupings tied to previous research or existing theoretical 
+framework.
+Creating groupings drawn from theory is not problematic in and of itself; how-
+ever, one of the aims of neurophenomenology is to identify invariant groupings that 
+emerge from lived experience. This is because according to the enactivist view of 
+mind, experience is where we are likely to identify the influences of embodiment, cul-
+ture, and environment that mediate cognition (Varela, Thompson, & Rosch, 2017). 
+For instance, in cognitive neuroscience, physiological and behavioral phenomena are 
+often examined with little to no accounting for the potential impact of participants’ 
+mental or emotional state, their habits of mind, or the settings in which experiments 
+occur. Moreover, even in studies that account for some of these variables, theoretical 
+116 Frank M. Diaz
+framings might unwittingly omit a meaningful explanatory variable, such as culture, 
+or assume that results from an experiment might be generalizable to participants and 
+environments vastly different from the ones investigated.
+Mindfulness Meditation as Disciplined Introspection
+Training participants to refine their introspection is one way to engage in neurophe-
+nomenology, but in some cases, participants may already be engaging in these types of 
+practices on their own. For instance, an increasing number of people, including many 
+musicians, have reported that they meditate (Diaz, 2018). In addition, for those who 
+engage in practices such as mindfulness meditation, disciplined introspection occurs 
+in a manner similar to the three-part cycle proposed by Lutz and Thompson (2003). 
+For example, many mindfulness practices instruct participants to “let go” of intrusive 
+or judgmental thoughts while focusing on a selected object (suspension), redirect and 
+stabilize attention to the present moment or other features of experience (redirection), 
+and allow for novel features of experience to emerge during this act of stabilization 
+(receptivity).
+In a study by Berkovich-Ohana et al. (2020), the researchers used experienced 
+meditators as participants in a neurophenomenological study of self-boundaries, 
+arguing that meditators bring enhanced sensitivity to subtle aspects of lived experi-
+ence. In a related study, Diaz, Silveira, and Strand (2020) examined how mindful-
+ness training might enhance sensitivity to specific dimensions of experience among 
+musician meditators. For music scholars, recruiting trained musician-meditators or 
+using pre-recorded guided mindfulness tasks might assist in neurophenomenologi-
+cal study.
+Philosophical Roots of Neurophenomenology
+The importance of first-person perspectives in neurophenomenology is rooted in the 
+enactivist view of mind, which proposes that cognition is a groundless process that 
+emerges through an organism’s dynamic coupling with its environment ( Va rel a , 
+Thompson, & Rosch, 2017). When organisms act upon and make sense of their 
+world, they do so in a manner influenced by the characteristics of their brains and 
+bodies. A bee’s shape and sensory system afford it the capacity to notice flowers 
+in a manner different from humans, and its brain allows it to process information 
+relevant to pollination. Likewise, human beings act upon a world shaped not only 
+by the limitations of their embodiment but by their cultural perspectives, habits of 
+mind, and sense of self as well. While we will likely never know what it is like to be 
+a bee, through disciplined examination of the dynamics of lived experience, we can 
+learn a lot about what it is like to be a human. Therefore, to reduce or ground cog-
+nition to any specific dimension, whether neural, physiological, or psychological, is 
+to ignore the various dynamic, complex, and situated processes that likely influence 
+its emergence.
+Some enactivists cite the influence of Buddhist philosophical traditions, such as 
+Madhyamaka (the middle way), for their conceptions of groundlessness. For instance, 
+in Varela, Thompson, and Rosch’s seminal book, The Embodied Mind, the authors 
+describe how Madhyamaka posits that nothing in the world has an independent 
+nature. Rather, everything arises through dependent origination. There are numer-
+ous examples of what might constitute dependent origination, but one way to bring 
+Neurophenomenology: Mapping Structures of the Mind 117
+reflect upon this concept is to consider your existence at this moment. You did not 
+“spring” to life from nowhere. You had parents who came together somehow, and 
+whose conditions for existence depended on their parents, and so forth. Therefore, 
+there is no essential you, psychologically, physically, or otherwise, that is not in some 
+way dependent on the existence of the things that caused it. Within Madhyamaka, 
+dependent origination extends to anything that can be apprehended, including feel-
+ings, perceptions, concepts, and the notion of a fixed or essential “self.” Because 
+things do not have essential or independent natures, all phenomena are said to be 
+“empty” (sunyata) of intrinsic existence.
+In order to make sense of how this dynamic, complex, and distributed view of 
+mind appears to us experientially, Varela, Thompson, and Rosch propose the need 
+for disciplined introspection. Situated within the framework of neurophenomenology, 
+disciplined introspection is how we arrive at phenomenal invariants, and these invari-
+ants are the bridge we use to understand relationships between first- and third-person 
+observations of cognition. Within Western philosophy, the phenomenological tradi-
+tions put forth by Edmund Husserl and Maurice Merleau-Ponty qualify as forms 
+of disciplined introspection. However, in the first edition of The Embodied Mind, 
+the authors propose introspective approaches based on the Buddhist philosophies of 
+Abhidharma and Madhyamaka, which they considered less abstract and more sit-
+uated within the pragmatics of everyday life, and thus better suited for this kind of 
+task.1
+Second-Person Methods
+The process of instigating, recalling, and making sense of first-person observations 
+can be greatly enhanced by second-person methods (Berkovich-Ohana et al., 2020). 
+Broadly, these approaches include strategies that assist participants in becoming 
+sensitized to features of experience that might serve as “bridges” between first- and 
+third-person observations. Second-person methods usually employ an experienced 
+mediator, ensuring that the person helping to guide these introspective processes is 
+familiar with the context under investigation. For neurophenomenological investiga-
+tion, various kinds of second-person methods may be useful. These include guided 
+introspection, such as the kind employed in the study on vision by Lutz and Thompson 
+(2003), interview techniques, as well as adaptations of methods commonly employed 
+in qualitative research. In the section that follows, I describe four potential avenues for 
+facilitating introspection, including descriptive experience sampling (DES) (Hurlburt 
+& Akhter, 2006), elicitation interviews (Vermersch, 2009), qualitative interviews, 
+and surveys and questionnaires.
+Descriptive Experience Sampling
+DES is a method aimed at training participants to observe and describe inner expe-
+riences that occur randomly throughout daily activities (Hurlburt & Akhter, 2006). 
+Random solicitation here is designed to reduce biases that may be introduced through 
+participants’ intentional selection of specific moments. During training, participants 
+receive an electronic device such as a pager that randomly alerts them that it is time to 
+observe and write about their present-moment experience. Participants usually receive 
+six alerts during a 24-hour period and then meet with an interviewer the subsequent 
+day to discuss their observations. Through an iterative process, the interviewer helps 
+118 Frank M. Diaz
+participants become increasingly aware of the kinds of thoughts, feelings, and images 
+present in specific instances of awareness. This helps reduce the influence of expla-
+nations of present-moment experience in which preconceptions about what may be 
+happening distort what is truly occurring in present-moment consciousness.
+Elicitation Interview
+In elicitation interviews (ECs), researchers use a prescribed sequence of questioning 
+techniques to determine common structures of experience associated with specific 
+tasks (Vermersch, 2009). As in DES, the goal is to diminish the role of theorizing 
+about experiences and instead sensitize participants to processes that underlie how 
+experiences emerge and are structured in consciousness. The process outlined in ES is 
+as follows: (a) select an experience (b) evoke the experience, (c) sensitize participants 
+to how the experience unfolds in time, known as the diachronic dimension, (d) sen-
+sitize participants to the experiential aspects of experience at each moment, known 
+as the synchronic dimension. After data is collected, researchers analyze responses to 
+determine commonalities between and within participants relating to the diachronic 
+and synchronous dimensions of their experiences.
+Qualitative Research Approaches2
+In-depth and semi-structured interview techniques as employed in qualitative 
+research may serve as models for developing second-person approaches in neu-
+rophenomenology. Specifically, processes such as specifying a specific context or 
+phenomena for participants to reflect on, allowing for a continuum of structure in 
+the interview process (open-ended to structured questions), iterative processes for 
+refining data (member checking and saturation), and structured and open-ended 
+coding may meet some of the aims of the neurophenomenological approach.1 There 
+is also an emphasis on triangulation and positionality in qualitative research that 
+may help uncover bias in what interviewers ask participants and on how they inter-
+pret data that emerges from these interviews. It should be stated here that qualita-
+tive interview approaches do not necessarily aim at uncovering structural invariants 
+for the kinds of purposes defined in the neurophenomenological approach. There 
+are also key differences in the kinds of contexts and experiences examined between 
+neurophenomenological and qualitative approaches, making any strict transfer 
+between these domains problematic. However, with respect to protocols and pro-
+cesses, much can be gained from exploring adaptations of these techniques within 
+the neurophenomenological paradigm.
+Surveys and Questionnaires
+Within both psychology and sociology, there is a tradition of examining mental pro-
+cesses, feelings, and behaviors through the use of questionnaires. These questionnaires 
+are often designed to evaluate theories about latent phenomena such as cognitive pro-
+cesses or personality traits that are not directly observable. Within neurophenomenol-
+ogy, these kinds of more structured and theoretically derived approaches are referred 
+to as thin phenomenology (Berkovich-Ohana et al., 2020). These methods may be 
+useful for examining the reliability and validity of structural invariants that emerge 
+from various forms of introspection but have not been widely applied within this 
+framework.

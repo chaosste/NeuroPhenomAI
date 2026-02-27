@@ -18,6 +18,7 @@ export interface Settings {
   language: LanguagePreference;
   voiceGender: VoiceGender;
   privacyContract: boolean;
+  increasedSensitivityMode: boolean;
   interviewMode: InterviewMode;
   persistLocalData: boolean;
   apiKey?: string;
@@ -41,6 +42,11 @@ export interface AnalysisResult {
   takeaways: string[];
   modalities: string[];
   phasesCount: number;
+  codebookSuggestions?: {
+    label: string;
+    rationale: string;
+    exemplarQuote: string;
+  }[];
   diachronicStructure: {
     phaseName: string;
     description: string;

@@ -97,6 +97,56 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
     setNewCodeName('');
   };
 
+  const importAISuggestedCodebook = () => {
+    const suggestions = session.analysis?.codebookSuggestions || [];
+    if (suggestions.length === 0) return;
+
+    const existing = new Set(session.codes.map(code => code.name.trim().toLowerCase()));
+    const additions: Code[] = [];
+
+    suggestions.forEach((s) => {
+      const label = s.label.trim();
+      if (!label) return;
+      if (existing.has(label.toLowerCase())) return;
+      additions.push({
+        id: crypto.randomUUID(),
+        name: label,
+        color: COLORS.codeColors[(session.codes.length + additions.length) % COLORS.codeColors.length]
+      });
+    });
+
+    if (additions.length === 0) return;
+    onUpdate({ ...session, codes: [...session.codes, ...additions] });
+  };
+
+  const exportProtocolPackage = () => {
+    const payload = {
+      protocolVersion: "neurophenom-v1.4",
+      exportedAt: new Date().toISOString(),
+      session: {
+        id: session.id,
+        date: session.date,
+        duration: session.duration,
+        type: session.type
+      },
+      coding: {
+        codes: session.codes,
+        annotations: session.annotations
+      },
+      analysis: session.analysis
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = `neurophenom-protocol-${session.id}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(href);
+  };
+
   const renderSegmentText = (text: string, segmentIndex: number) => {
     const segmentAnnotations = session.annotations
       .filter(a => a.segmentIndex === segmentIndex)
@@ -179,7 +229,14 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
           <div className="h-10 w-[2px] bg-neutral-100 hidden lg:block" />
           <div className="hidden lg:flex gap-4">
             <Button variant="outline" size="sm" className="px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest">METADATA</Button>
-            <Button variant="outline" size="sm" className="px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest">EXPORT protocol</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest"
+              onClick={exportProtocolPackage}
+            >
+              EXPORT protocol
+            </Button>
           </div>
         </div>
 
@@ -318,6 +375,30 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
                   <Button onClick={addCode} className="w-full rounded-xl" size="md">Catalog Theme</Button>
                 </div>
               </div>
+
+              {(session.analysis?.codebookSuggestions?.length || 0) > 0 && (
+                <div className="mb-16 p-6 border-2 border-black rounded-2xl bg-[#fafafa]">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em]">AI Codebook Seeds</p>
+                    <Button
+                      size="sm"
+                      className="rounded-lg px-3 py-1.5 text-[10px] tracking-wider"
+                      onClick={importAISuggestedCodebook}
+                    >
+                      Import All
+                    </Button>
+                  </div>
+                  <div className="space-y-4 max-h-64 overflow-y-auto no-scrollbar pr-1">
+                    {session.analysis?.codebookSuggestions?.map((suggestion, i) => (
+                      <div key={`${suggestion.label}-${i}`} className="border border-black/10 rounded-xl p-3 bg-white">
+                        <p className="text-xs font-black uppercase tracking-wide mb-1">{suggestion.label}</p>
+                        <p className="text-[11px] text-neutral-600 leading-relaxed mb-2">{suggestion.rationale}</p>
+                        <p className="text-[10px] italic text-neutral-500">"{suggestion.exemplarQuote}"</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-12">
                 {session.codes.map(code => {
