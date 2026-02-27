@@ -16,7 +16,6 @@
     "lucide-react": "^0.562.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "serve": "^14.2.5",
     "vite": "^7.3.1"
   },
   "devDependencies": {
