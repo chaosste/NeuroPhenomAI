@@ -95,7 +95,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({
                 checked={settings.privacyContract}
                 onChange={(e) => toggleSetting('privacyContract', e.target.checked)}
               />
-              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-black/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-black"></div>
             </label>
           </div>
 
@@ -112,7 +112,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({
                 checked={settings.increasedSensitivityMode}
                 onChange={(e) => toggleSetting('increasedSensitivityMode', e.target.checked)}
               />
-              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-black/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-black"></div>
             </label>
           </div>
 
@@ -129,7 +129,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({
                 checked={settings.persistLocalData}
                 onChange={(e) => toggleSetting('persistLocalData', e.target.checked)}
               />
-              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-black/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-black"></div>
             </label>
           </div>
 
@@ -145,13 +145,13 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({
               value={settings.apiKey || ''}
               onChange={(e) => toggleSetting('apiKey', e.target.value)}
               placeholder="Enter your API key"
-              className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/30"
             />
             <a 
               href="https://aistudio.google.com/apikey" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-xs text-blue-500 hover:text-blue-600 mt-1 block"
+              className="text-xs text-neutral-500 hover:text-black mt-1 block transition-colors"
             >
               Get your free API key →
             </a>

@@ -9,45 +9,44 @@ export const COLORS = {
   text: '#000000',
   border: '#e5e5e5',
   codeColors: [
-    '#000000', '#333333', '#666666', '#999999', '#bbbbbb', '#dddddd', '#222222', '#444444', '#555555', '#777777'
+    '#B45309', // Amber Depth — warmth, embodiment, somatic grounding
+    '#0E7490', // Cerulean Deep — perceptual vastness, spatial awareness
+    '#9F1239', // Deep Rose — intimate felt-sense, affect
+    '#4D7C0F', // Vital Green — organic emergence, temporal process
+    '#6D28D9', // Indigo Night — contemplative, liminal, meta-cognitive
+    '#CA8A04', // Golden Essence — luminous clarity, attention
+    '#B91C1C', // Burnt Vermillion — intensity, salience, threshold
+    '#0F766E', // Teal Shadow — boundary, transition, the in-between
+    '#92400E', // Dark Sienna — sedimented memory, recall
+    '#4338CA', // Twilight Blue — pre-reflective gestalt, dream-edge
   ]
 };
 
 export const Artifact = ({ className = "" }: { className?: string }) => (
-  <svg 
-    viewBox="0 0 100 100" 
-    className={className} 
-    fill="none" 
+  <svg
+    viewBox="0 0 100 100"
+    className={className}
+    fill="none"
     xmlns="http://www.w3.org/2000/svg"
     aria-hidden="true"
   >
     <rect width="100" height="100" rx="20" fill="currentColor" />
-    <path 
-      d="M25 50 Q 40 20 50 50 T 75 50" 
-      stroke="white" 
-      strokeWidth="3" 
-      fill="none" 
+    {/* The Epoché — left bracket */}
+    <path
+      d="M 43 22 C 18 36, 18 64, 43 78"
+      stroke="white"
+      strokeWidth="3.5"
+      strokeLinecap="round"
     />
-    <path 
-      d="M25 62 Q 40 32 50 62 T 75 62" 
-      stroke="white" 
-      strokeWidth="2" 
-      fill="none" 
-      opacity="0.5"
+    {/* The Epoché — right bracket */}
+    <path
+      d="M 57 22 C 82 36, 82 64, 57 78"
+      stroke="white"
+      strokeWidth="3.5"
+      strokeLinecap="round"
     />
-    <path 
-      d="M25 38 Q 40 8 50 38 T 75 38" 
-      stroke="white" 
-      strokeWidth="2" 
-      fill="none" 
-      opacity="0.5"
-    />
-    <line 
-      x1="50" y1="20" x2="50" y2="80" 
-      stroke="white" 
-      strokeWidth="1.5" 
-      strokeDasharray="4 4" 
-    />
+    {/* The Descripteme — the datum of lived experience */}
+    <circle cx="50" cy="50" r="4.5" fill="white" />
   </svg>
 );
 
