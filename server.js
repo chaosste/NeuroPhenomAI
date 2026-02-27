@@ -25,6 +25,13 @@ const analysisRateLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many analysis requests. Please retry shortly." }
 });
+const staticFallbackRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.STATIC_RATE_LIMIT_MAX || 300),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please retry shortly." }
+});
 
 const foundryEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
 const foundryApiKey = process.env.AZURE_OPENAI_API_KEY;
@@ -324,7 +331,7 @@ app.post("/api/analyze", analysisRateLimiter, jsonParser, async (req, res) => {
 app.use(express.static(distPath));
 
 // SPA fallback (client-side routing) - Express 5 compatible
-app.get(/.*/, (req, res) => {
+app.get(/.*/, staticFallbackRateLimiter, (req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
