@@ -1,6 +1,6 @@
 # Copilot Instructions
 
-Use the canonical ops docs in [](https://github.com/chaosste/ops-playbooks) as source of truth.
+Use the canonical ops docs in [`chaosste/ops-playbooks`](https://github.com/chaosste/ops-playbooks) as source of truth.
 
 - Guidebook prompt: <https://github.com/chaosste/ops-playbooks/blob/main/copilot/COPILOT_GUIDEBOOK_PROMPT.md>
 - Workspace model: <https://github.com/chaosste/ops-playbooks/blob/main/workspaces/WORKSPACE_INDEX.md>
