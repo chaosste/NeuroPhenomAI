@@ -156,7 +156,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
       return (
         <p 
           onMouseUp={() => handleTextSelection(segmentIndex)}
-          className="segment-text-container text-2xl leading-[1.4] text-black font-semibold tracking-tight select-text"
+          className="segment-text-container text-[15px] leading-relaxed text-black/85 font-normal select-text"
         >
           {text}
         </p>
@@ -172,13 +172,17 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
       }
       const code = session.codes.find(c => c.id === anno.codeId);
       parts.push(
-        <mark 
+        <mark
           key={anno.id}
-          className="bg-black/5 border-b-4 border-black relative group/mark cursor-help px-0.5"
+          className="relative group/mark cursor-help px-0.5 rounded-sm"
+          style={{ backgroundColor: `${code?.color}18`, borderBottom: `3px solid ${code?.color}` }}
           title={code?.name}
         >
           {text.substring(anno.startOffset, anno.endOffset)}
-          <span className="absolute -top-8 left-0 text-[9px] font-black uppercase tracking-widest bg-black text-white px-2 py-0.5 opacity-0 group-hover/mark:opacity-100 transition-opacity whitespace-nowrap z-10 rounded">
+          <span
+            className="absolute -top-9 left-0 text-[9px] font-black uppercase tracking-widest text-white px-2.5 py-1 opacity-0 group-hover/mark:opacity-100 transition-opacity whitespace-nowrap z-10 rounded-md shadow-lg"
+            style={{ backgroundColor: code?.color }}
+          >
             {code?.name}
           </span>
         </mark>
@@ -193,7 +197,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
     return (
       <div 
         onMouseUp={() => handleTextSelection(segmentIndex)}
-        className="segment-text-container text-2xl leading-[1.4] text-black font-semibold tracking-tight select-text"
+        className="segment-text-container text-[15px] leading-relaxed text-black/85 font-normal select-text"
       >
         {parts}
       </div>
@@ -271,7 +275,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
                     <History size={16} />
                     <span className="text-[10px] font-black uppercase tracking-[0.6em]">Phenomenological_Registry</span>
                   </div>
-                  <h3 className="text-6xl lg:text-8xl font-black uppercase tracking-tighter mb-10 leading-[0.85]">{session.analysis?.summary}</h3>
+                  <h3 className="text-3xl lg:text-4xl font-black uppercase tracking-tight mb-8 leading-snug">{session.analysis?.summary}</h3>
                   <div className="flex gap-12">
                     <div className="flex flex-col">
                       <span className="text-[9px] font-black uppercase text-neutral-400 tracking-widest mb-2">Registry_Date</span>
@@ -304,15 +308,17 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
                           .map(a => {
                             const code = session.codes.find(c => c.id === a.codeId);
                             return (
-                              <div 
+                              <div
                                 key={a.id}
-                                className="group/anno px-4 py-1.5 text-[9px] font-black uppercase border-2 border-black flex items-center gap-4 hover:bg-black hover:text-white transition-all cursor-default rounded-lg"
+                                className="group/anno px-3 py-1.5 text-[9px] font-black uppercase flex items-center gap-2.5 transition-all cursor-default rounded-lg border"
+                                style={{ borderColor: `${code?.color}35`, color: code?.color }}
                               >
-                                <span>{code?.name}: "{a.text}"</span>
-                                <X 
-                                  size={12} 
-                                  className="cursor-pointer opacity-0 group-hover/anno:opacity-100 hover:text-red-400" 
-                                  onClick={() => onUpdate({ ...session, annotations: session.annotations.filter(an => an.id !== a.id) })} 
+                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: code?.color }} />
+                                <span className="truncate max-w-[220px]">{code?.name}: "{a.text}"</span>
+                                <X
+                                  size={11}
+                                  className="cursor-pointer opacity-0 group-hover/anno:opacity-100 flex-shrink-0 hover:opacity-60"
+                                  onClick={() => onUpdate({ ...session, annotations: session.annotations.filter(an => an.id !== a.id) })}
                                 />
                               </div>
                             );
@@ -338,12 +344,13 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
                       <p className="text-[10px] font-bold text-neutral-500 uppercase italic py-4">Define taxonomy first...</p>
                     )}
                     {session.codes.map(code => (
-                      <button 
-                        key={code.id} 
-                        onClick={() => applyCode(code.id)} 
-                        className="text-left text-[12px] font-bold uppercase py-2 px-4 hover:bg-white hover:text-black transition-colors flex items-center justify-between group/btn rounded-lg"
+                      <button
+                        key={code.id}
+                        onClick={() => applyCode(code.id)}
+                        className="text-left text-[12px] font-bold uppercase py-2 px-4 hover:bg-white/10 transition-colors flex items-center gap-3 group/btn rounded-lg"
                       >
-                        {code.name}
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 ring-1 ring-white/20" style={{ backgroundColor: code.color }} />
+                        <span className="flex-1">{code.name}</span>
                         <ArrowRight size={12} className="opacity-0 group-hover/btn:opacity-100 transition-transform" />
                       </button>
                     ))}
@@ -390,8 +397,11 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
                   </div>
                   <div className="space-y-4 max-h-64 overflow-y-auto no-scrollbar pr-1">
                     {session.analysis?.codebookSuggestions?.map((suggestion, i) => (
-                      <div key={`${suggestion.label}-${i}`} className="border border-black/10 rounded-xl p-3 bg-white">
-                        <p className="text-xs font-black uppercase tracking-wide mb-1">{suggestion.label}</p>
+                      <div key={`${suggestion.label}-${i}`} className="rounded-xl p-3 bg-white border" style={{ borderColor: `${COLORS.codeColors[(session.codes.length + i) % COLORS.codeColors.length]}25` }}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS.codeColors[(session.codes.length + i) % COLORS.codeColors.length] }} />
+                          <p className="text-xs font-black uppercase tracking-wide">{suggestion.label}</p>
+                        </div>
                         <p className="text-[11px] text-neutral-600 leading-relaxed mb-2">{suggestion.rationale}</p>
                         <p className="text-[10px] italic text-neutral-500">"{suggestion.exemplarQuote}"</p>
                       </div>
@@ -405,15 +415,24 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
                   const count = session.annotations.filter(a => a.codeId === code.id).length;
                   return (
                     <div key={code.id} className="flex flex-col gap-3 group">
-                      <div className="flex justify-between items-end border-b-2 border-black/5 pb-3 group-hover:border-black transition-colors">
-                        <span className="text-xs font-black uppercase tracking-widest">{code.name}</span>
-                        <span className="text-[10px] font-mono font-black bg-neutral-100 px-3 py-1 rounded-full group-hover:bg-black group-hover:text-white transition-colors">{count}</span>
+                      <div className="flex justify-between items-end border-b border-black/5 pb-3 group-hover:border-black/20 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <span className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm" style={{ backgroundColor: code.color }} />
+                          <span className="text-xs font-black uppercase tracking-widest">{code.name}</span>
+                        </div>
+                        <span
+                          className="text-[10px] font-mono font-black px-3 py-1 rounded-full transition-colors"
+                          style={{ backgroundColor: `${code.color}12`, color: code.color }}
+                        >
+                          {count}
+                        </span>
                       </div>
                       <div className="flex gap-1.5 h-1.5 px-0.5">
                         {[...Array(10)].map((_, i) => (
-                          <div 
-                            key={i} 
-                            className={`h-full flex-1 rounded-full transition-all duration-300 ${i < count ? 'bg-black' : 'bg-neutral-100'}`} 
+                          <div
+                            key={i}
+                            className="h-full flex-1 rounded-full transition-all duration-300"
+                            style={{ backgroundColor: i < count ? code.color : '#f5f5f5' }}
                           />
                         ))}
                       </div>
@@ -432,8 +451,8 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
                   <h4 className="text-[11px] font-black uppercase tracking-[0.8em]">Structural Synthesis v.1.0</h4>
                 </div>
                 <div className="relative">
-                  <div className="absolute -left-16 top-0 bottom-0 w-3 bg-black rounded-full" />
-                  <p className="text-7xl lg:text-9xl font-black uppercase tracking-tighter leading-[0.8] italic">
+                  <div className="absolute -left-16 top-0 bottom-0 w-3 rounded-full" style={{ background: 'linear-gradient(180deg, #B45309, #0E7490, #9F1239, #4D7C0F, #6D28D9)' }} />
+                  <p className="text-4xl lg:text-6xl font-black uppercase tracking-tighter leading-[0.85] italic">
                     "{session.analysis?.summary}"
                   </p>
                 </div>
@@ -446,10 +465,13 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
                     <h4 className="text-sm font-black uppercase tracking-[0.4em]">Diachronic Sequence</h4>
                   </div>
                   <div className="space-y-24 relative">
-                    <div className="absolute left-[9px] top-6 bottom-6 w-1 bg-black opacity-5 rounded-full" />
+                    <div className="absolute left-[9px] top-6 bottom-6 w-1 rounded-full opacity-20" style={{ background: 'linear-gradient(180deg, #B45309, #0E7490, #4D7C0F, #6D28D9)' }} />
                     {session.analysis?.diachronicStructure.map((phase, i) => (
                       <div key={i} className="group relative pl-12">
-                        <div className="absolute left-0 top-1.5 w-5 h-5 bg-white border-4 border-black rounded-full z-10 group-hover:bg-black transition-all group-hover:scale-125" />
+                        <div
+                          className="absolute left-0 top-1.5 w-5 h-5 bg-white border-4 rounded-full z-10 transition-all group-hover:scale-125"
+                          style={{ borderColor: COLORS.codeColors[i % COLORS.codeColors.length] }}
+                        />
                         <div className="mb-6">
                           <span className="text-[10px] font-black mb-2 block opacity-30 tracking-[0.4em]">FRAGMENT_0{i + 1}</span>
                           <h5 className="text-3xl font-black uppercase tracking-tight group-hover:translate-x-3 transition-transform">{phase.phaseName}</h5>
@@ -469,6 +491,10 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
                     {session.analysis?.synchronicStructure.map((struct, i) => (
                       <div key={i} className="border-2 border-black p-10 hover:shadow-[20px_20px_0px_0px_rgba(0,0,0,0.05)] transition-all bg-[#fafafa] rounded-[32px] group">
                         <div className="flex items-center gap-4 mb-8">
+                          <span
+                            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: COLORS.codeColors[(i + 1) % COLORS.codeColors.length] }}
+                          />
                           <span className="text-[10px] font-black uppercase tracking-[0.4em] bg-black text-white px-5 py-2 rounded-full group-hover:bg-neutral-800">{struct.category}</span>
                         </div>
                         <p className="text-2xl font-bold uppercase leading-tight tracking-tight">{struct.details}</p>
@@ -482,7 +508,13 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
                 <h4 className="text-sm font-black uppercase tracking-[0.4em] mb-20">Component Registry</h4>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-0 border-2 border-black rounded-[40px] overflow-hidden">
                   {session.analysis?.modalities.map((m, i) => (
-                    <div key={i} className="border-r border-b border-black p-12 flex flex-col gap-8 group hover:bg-black hover:text-white transition-all">
+                    <div
+                      key={i}
+                      className="border-r border-b border-black p-12 flex flex-col gap-8 group hover:text-white transition-all"
+                      style={{ ['--modality-color' as string]: COLORS.codeColors[i % COLORS.codeColors.length] }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLORS.codeColors[i % COLORS.codeColors.length])}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
                       <div className="w-12 h-12 border-2 border-current rounded-xl flex items-center justify-center font-mono text-sm font-black opacity-30 group-hover:opacity-100 transition-opacity">
                         0{i + 1}
                       </div>
