@@ -1,6 +1,6 @@
 # NP Canonical Spec (Runtime v1.0)
 
-This is the single source of truth for NeuroPhenom-AI interview and codification behavior.
+This is the single source of truth for NeuroPhenomAI interview and codification behavior.
 
 ## 1) Interview method constraints
 

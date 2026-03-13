@@ -50,8 +50,8 @@ Featuring a stark black-and-white minimalist design, the interface stays out of 
 
 ```bash
 # Clone the repository
-git clone https://github.com/chaosste/NeuroPhenom-AI.git
-cd NeuroPhenom-AI
+git clone https://github.com/chaosste/NeuroPhenomAI.git
+cd NeuroPhenomAI
 
 # Install dependencies
 npm install

@@ -28,7 +28,7 @@
   "description": "Clinical neurophenomenology platform for micro-phenomenological interviews with privacy-first design",
   "repository": {
     "type": "git",
-    "url": "https://github.com/chaosste/NeuroPhenom-AI"
+    "url": "https://github.com/chaosste/NeuroPhenomAI"
   },
   "keywords": [
     "neurophenomenology",
