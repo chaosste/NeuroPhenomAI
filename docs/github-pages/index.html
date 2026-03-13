@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NeuroPhenom AI</title>
+    <meta
+      name="description"
+      content="NeuroPhenom AI is a clinical neurophenomenology interface for structured micro-phenomenological interviewing, live dialogue, and qualitative analysis."
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4efe4;
+        --surface: rgba(255, 252, 247, 0.8);
+        --ink: #1d2328;
+        --muted: #5b625b;
+        --accent: #0b6d77;
+        --accent-2: #c5663d;
+        --line: rgba(29, 35, 40, 0.12);
+        --shadow: 0 24px 60px rgba(22, 27, 31, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(11, 109, 119, 0.15), transparent 30%),
+          radial-gradient(circle at top right, rgba(197, 102, 61, 0.18), transparent 35%),
+          linear-gradient(180deg, #f8f2e9 0%, var(--bg) 100%);
+      }
+
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 48px 20px 72px;
+      }
+
+      .frame {
+        border: 1px solid var(--line);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(16px);
+      }
+
+      .hero {
+        padding: 28px;
+      }
+
+      .eyebrow {
+        margin: 0 0 12px;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-size: 12px;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2.8rem, 7vw, 5.4rem);
+        line-height: 0.92;
+        letter-spacing: -0.05em;
+      }
+
+      .lede {
+        max-width: 720px;
+        margin: 20px 0 0;
+        font-size: 1.2rem;
+        line-height: 1.7;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      @media (min-width: 760px) {
+        .grid {
+          grid-template-columns: 1.4fr 1fr;
+        }
+      }
+
+      .card {
+        padding: 24px;
+      }
+
+      h2 {
+        margin: 0 0 14px;
+        font-size: 1.2rem;
+        letter-spacing: -0.02em;
+      }
+
+      p,
+      li {
+        font-size: 1rem;
+        line-height: 1.7;
+        color: var(--muted);
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 16px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-size: 0.95rem;
+        font-weight: 600;
+      }
+
+      .button.primary {
+        background: var(--ink);
+        color: #fffdf8;
+      }
+
+      .button.secondary {
+        border-color: var(--line);
+        color: var(--ink);
+        background: rgba(255, 255, 255, 0.5);
+      }
+
+      .footer {
+        margin-top: 18px;
+        padding: 18px 24px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+        justify-content: space-between;
+        align-items: center;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-size: 0.9rem;
+        color: var(--muted);
+      }
+
+      a {
+        color: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="frame hero">
+        <p class="eyebrow">Clinical Neurophenomenology Interface</p>
+        <h1>NeuroPhenom AI</h1>
+        <p class="lede">
+          A research-facing environment for live micro-phenomenological interviewing,
+          structured qualitative synthesis, and privacy-conscious experiential analysis.
+        </p>
+        <div class="actions">
+          <a class="button primary" href="https://www.neurophenomai.newpsychonaut.com/">Open Live App</a>
+          <a class="button secondary" href="https://github.com/chaosste/NeuroPhenom-AI">View Repository</a>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="frame card">
+          <h2>What It Does</h2>
+          <ul>
+            <li>Runs structured neurophenomenology interviews with configurable tone and sensitivity.</li>
+            <li>Generates summaries, takeaways, diachronic structure, synchronic structure, and coding suggestions.</li>
+            <li>Supports live interviewing workflows alongside post-session qualitative analysis.</li>
+            <li>Targets a privacy-first clinical-research posture rather than a generic chatbot experience.</li>
+          </ul>
+        </article>
+
+        <article class="frame card">
+          <h2>Project Links</h2>
+          <ul>
+            <li><a href="https://www.neurophenomai.newpsychonaut.com/">Production deployment</a></li>
+            <li><a href="https://github.com/chaosste/NeuroPhenom-AI">Source code on GitHub</a></li>
+            <li><a href="https://newpsychonaut.com/">New Psychonaut</a></li>
+          </ul>
+        </article>
+      </section>
+
+      <footer class="frame footer">
+        <span>Draft GitHub Pages landing page for the NeuroPhenom AI repository.</span>
+        <span>Prepared for the March 13, 2026 Azure cutover.</span>
+      </footer>
+    </main>
+  </body>
+</html>

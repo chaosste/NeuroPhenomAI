@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  AZURE_HEALTH_URL: https://neurophenom-finesse.azurewebsites.net/api/health
+  AZURE_HEALTH_URL: https://neurophenom.azurewebsites.net/api/health
   CUSTOM_HEALTH_URL: https://www.neurophenomai.newpsychonaut.com/api/health
   EXPECTED_SUBSTRING: '"service":"neurophenomai"'
 

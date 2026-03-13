@@ -6,7 +6,7 @@ Use `*ai` as the public/canonical product identity across domains, health payloa
 
 | Product | Canonical ID | Canonical Public Host | Current Azure App Service |
 |---|---|---|---|
-| NeuroPhenom | `neurophenomai` | `www.neurophenomai.newpsychonaut.com` | `neurophenom-finesse` |
+| NeuroPhenom | `neurophenomai` | `www.neurophenomai.newpsychonaut.com` | `neurophenom` |
 | MicroPhenom | `microphenomai` | `www.microphenomai.newpsychonaut.com` | `microphenom` |
 | Facilitator | `facilitatorai` | `www.facilitatorai.newpsychonaut.com` | `facilitator-ai` |
 | Anubis | `anubisai` | `www.anubisai.newpsychonaut.com` | `anubis-ai` |
