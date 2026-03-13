@@ -72,12 +72,19 @@ jobs:
         id: preflight
         shell: bash
         env:
+          DEPLOY_USERNAME: ${{ secrets.AZURE_WEBAPP_DEPLOY_USERNAME }}
+          DEPLOY_PASSWORD: ${{ secrets.AZURE_WEBAPP_DEPLOY_PASSWORD }}
           PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
           set -euo pipefail
+          if [[ -n "${DEPLOY_USERNAME}" && -n "${DEPLOY_PASSWORD}" ]]; then
+            echo "Deploy mode: basic-auth"
+            echo "deploy_mode=basic_auth" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [[ -n "${PUBLISH_PROFILE}" ]]; then
             echo "Deploy mode: publish-profile"
             echo "deploy_mode=publish_profile" >> "$GITHUB_OUTPUT"
@@ -95,6 +102,26 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Package deploy archive for Kudu
+        if: ${{ steps.preflight.outputs.deploy_mode == 'basic_auth' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip -qr app.zip .
+
+      - name: Deploy to Azure Web App (Basic Auth)
+        if: ${{ steps.preflight.outputs.deploy_mode == 'basic_auth' }}
+        shell: bash
+        env:
+          DEPLOY_USERNAME: ${{ secrets.AZURE_WEBAPP_DEPLOY_USERNAME }}
+          DEPLOY_PASSWORD: ${{ secrets.AZURE_WEBAPP_DEPLOY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent \
+            --user "${DEPLOY_USERNAME}:${DEPLOY_PASSWORD}" \
+            --data-binary @app.zip \
+            "https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net/api/zipdeploy"
 
       - name: Deploy to Azure Web App (Publish Profile)
         if: ${{ steps.preflight.outputs.deploy_mode == 'publish_profile' }}
