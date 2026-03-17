@@ -2,11 +2,30 @@
 
 # 🧠 NeuroPhenom AI
 
-**High-Fidelity Clinical Interface for Neurophenomenology**
+** 🎚️ High-Fidelity Clinical Interface for Neurophenomenology **
 
-*Mapping pre-reflective subjective experience through granular interview techniques*
 
-<img src="Images/neurophenom-screenshot.jpg" width="600" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" />
+<img src="Images/neurophenom-screenshot.jpg" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" />
+
+
+** ꩜ Mapping pre-reflective subjective experience through granular interview techniques **
+
+
+<img src="Images/neurophenom-ai-confidentiality.gif" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" />
+
+
+** 📝 Use the trained AI research interviewer or record and transcribe **
+
+
+<img src="Images/neurophenom-ai-report-quick.gif" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" />
+
+
+** 🧩 AI analyses and codifies each interview **
+
+
+<img src="Images/neurophenom-ai-codification.gif" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" />
+
+
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
@@ -19,6 +38,10 @@
 High-fidelity clinical interface for mapping pre-reflective subjective experience. The conversational AI is trained in granular microphenomenology interview techniques, on altered states of consciousness in particular. Codify and theme your subject data alongside NeuroPhenom AI's granular LLM engine. Analyse the micro-dynamics of lived moments through diachronic slicing and structural synthesis.
 
 Featuring a stark black-and-white minimalist design, the interface stays out of the way and lets the phenomenological work take centre stage.
+
+## Requirements
+
+Add Google Gemini API key in settings menu. Best performance in Chrome browser.
 
 ## Features
 
