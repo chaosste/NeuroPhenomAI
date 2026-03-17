@@ -55,11 +55,6 @@ Add Google Gemini API key in settings menu. Best performance in Chrome browser.
 - ⚙️ **Configurable** — Language, voice gender, and interview mode settings
 - 🖤 **Minimalist Design** — Clean black/white aesthetic focused on the work
 
-## Screenshots
-
-<!-- Add screenshots to Images/ folder -->
-<!-- <img src="Images/screenshot.png" width="600" alt="NeuroPhenom AI Interface" /> -->
-
 ## Tech Stack
 
 | Layer | Technology |
