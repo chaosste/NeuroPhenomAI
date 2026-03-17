@@ -155,10 +155,6 @@ const App: React.FC = () => {
         }
       } catch {}
     }
-    const sessionApiKey = sessionStorage.getItem('neuro_phenom_api_key');
-    if (sessionApiKey) {
-      setSettings(prev => ({ ...prev, apiKey: sessionApiKey }));
-    }
   }, []);
 
   useEffect(() => {
@@ -191,14 +187,6 @@ const App: React.FC = () => {
     const { apiKey: _omitApiKey, ...safeSettings } = settings;
     localStorage.setItem('neuro_phenom_settings', JSON.stringify(safeSettings));
   }, [settings]);
-
-  useEffect(() => {
-    if (settings.apiKey && settings.apiKey.trim().length > 0) {
-      sessionStorage.setItem('neuro_phenom_api_key', settings.apiKey);
-      return;
-    }
-    sessionStorage.removeItem('neuro_phenom_api_key');
-  }, [settings.apiKey]);
 
   const handleExportEncryptedArchive = async () => {
     if (sessions.length === 0) {
