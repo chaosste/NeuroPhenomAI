@@ -35,17 +35,17 @@
 
 ---
 
-## About
+## 💿 About
 
 High-fidelity clinical interface for mapping pre-reflective subjective experience. The conversational AI is trained in granular microphenomenology interview techniques, on altered states of consciousness in particular. Codify and theme your subject data alongside NeuroPhenom AI's granular LLM engine. Analyse the micro-dynamics of lived moments through diachronic slicing and structural synthesis.
 
 Featuring a stark black-and-white minimalist design, the interface stays out of the way and lets the phenomenological work take centre stage.
 
-## Requirements
+## 🗝️ Requirements
 
 Add Google Gemini API key in settings menu. Best performance in Chrome browser.
 
-## Features
+## ✨ Features
 
 - 🎙️ **Live Interview Sessions** — AI-guided microphenomenology interviews in real time
 - 🎤 **Standalone Recorder** — Capture audio independently of the interview system
@@ -57,16 +57,16 @@ Add Google Gemini API key in settings menu. Best performance in Chrome browser.
 - ⚙️ **Configurable** — Language, voice gender, and interview mode settings
 - 🖤 **Minimalist Design** — Clean black/white aesthetic focused on the work
 
-## Tech Stack
+## 🥪 Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Frontend | React + TypeScript, Vite |
 | AI | Google Gemini API |
 | Design | Minimalist black/white UI |
-| Deployment | Docker / Google Cloud |
+| Deployment | GitHub / Azure |
 
-## Installation
+## 🏎️ Installation
 
 ```bash
 # Clone the repository
@@ -82,7 +82,7 @@ npm install
 npm run dev
 ```
 
-## Workflow Protocol
+## 🦞 Workflow Protocol
 
 Use the worktree/branch protocol in:
 - `docs/WORKTREE_WORKFLOW_PROTOCOL.md`
@@ -90,13 +90,13 @@ Use the worktree/branch protocol in:
 Operational canon:
 - <https://github.com/chaosste/ops-playbooks>
 
-## Related Projects
+## 🧦 Related Projects
 
 > 💡 **Like NeuroPhenom AI? You'll love [MicroPhenom AI](https://github.com/chaosste/MicroPhenom-AI)** — the vanilla edition for granular reports on wider lived experience.
 
 > 𓂀 For psychedelic trip report interviews with theatrical deity-themed voices, see [Anubis](https://github.com/chaosste/Anubis).
 
-## Disclaimer
+## ⬇ Disclaimer
 
 NeuroPhenom AI is a research tool for exploring subjective experience. It does not provide medical, psychological, or therapeutic advice. It is not a substitute for professional support.
 
