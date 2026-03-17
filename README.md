@@ -11,7 +11,7 @@
 ** ꩜ Mapping pre-reflective subjective experience through granular interview techniques **
 
 
-<img src="Images/neurophenom-ai-confidentiality.gif" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" />
+<img src="Images/neurophenom-ai-confidentiality.gif" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" style="margin-top: 50px;" />
 
 
 ** 📝 Use the trained AI research interviewer or record and transcribe **
