@@ -2,30 +2,32 @@
 
 # 🧠 NeuroPhenom AI
 
-** 🎚️ High-Fidelity Clinical Interface for Neurophenomenology **
-
 
 <img src="Images/neurophenom-screenshot.jpg" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" />
 
+🎚️ High-Fidelity Clinical Interface for Neurophenomenology
 
-** ꩜ Mapping pre-reflective subjective experience through granular interview techniques **
 
+<br>
 
 <img src="Images/neurophenom-ai-confidentiality.gif" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" style="margin-top: 50px;" />
 
+꩜ Mapping pre-reflective subjective experience through granular interview techniques
 
-** 📝 Use the trained AI research interviewer or record and transcribe **
-
+<br>
 
 <img src="Images/neurophenom-ai-report-quick.gif" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" style="margin-top: 50px;" />
 
+📝 Use the trained AI research interviewer or record and transcribe
 
-** 🧩 AI analyses and codifies each interview **
-
+<br>
 
 <img src="Images/neurophenom-ai-codification.gif" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" style="margin-top: 50px;" />
 
 
+🧩 AI analyses and codifies each interview
+
+<br>`
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
