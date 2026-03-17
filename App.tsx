@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   InterviewSession, 
@@ -23,6 +22,7 @@ import LiveInterviewSession from './components/LiveInterviewSession';
 import AnalysisView from './components/AnalysisView';
 import SettingsMenu from './components/SettingsMenu';
 import StandaloneRecorder from './components/StandaloneRecorder';
+import AppFallback from './components/AppFallback';
 import Button from './components/Button';
 import { analyzeInterview } from './services/geminiService';
 import { Artifact } from './constants';
@@ -34,6 +34,9 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'AI_INTERVIEW' | 'RECORDED' | 'UPLOADED'>('ALL');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [offlineAcknowledged, setOfflineAcknowledged] = useState(false);
+  const [appNotice, setAppNotice] = useState<{ type: 'analysis-error'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [settings, setSettings] = useState<Settings>({
@@ -159,6 +162,24 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      setOfflineAcknowledged(false);
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      setOfflineAcknowledged(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
     if (settings.persistLocalData) {
       localStorage.setItem('neuro_phenom_sessions', JSON.stringify(sessions));
       return;
@@ -246,6 +267,10 @@ const App: React.FC = () => {
       setActiveSession(newSession);
       setView('analysis');
     } catch (error) {
+      setAppNotice({
+        type: 'analysis-error',
+        message: 'Analysis failed to load. Check your network connection and try again.'
+      });
       alert("MAPPING_PROTOCOL_FAILURE: Please check network status.");
     } finally {
       setIsAnalyzing(false);
@@ -456,6 +481,8 @@ const App: React.FC = () => {
     </div>
   );
 
+  const showOfflineOverlay = !isOnline && !offlineAcknowledged;
+
   return (
     <div className="min-h-screen bg-white text-black flex flex-col font-sans selection:bg-black selection:text-white">
       <header className="h-24 border-b-2 border-black px-10 flex items-center justify-between sticky top-0 z-50 bg-white/90 backdrop-blur-md">
@@ -523,6 +550,28 @@ const App: React.FC = () => {
             <Coffee size={24} className="group-hover:rotate-12 transition-transform" />
           </a>
         </div>
+      )}
+
+      {showOfflineOverlay && (
+        <AppFallback 
+          variant="offline" 
+          message="Your device appears offline. You can continue in read-only mode or retry the connection." 
+          primaryLabel="Retry Connection" 
+          onPrimaryAction={() => window.location.reload()} 
+          secondaryLabel="Continue Offline" 
+          onSecondaryAction={() => setOfflineAcknowledged(true)} 
+        />
+      )}
+
+      {appNotice && (
+        <AppFallback 
+          variant="analysis-error" 
+          message={appNotice.message} 
+          primaryLabel="Dismiss" 
+          onPrimaryAction={() => setAppNotice(null)} 
+          secondaryLabel="Reload" 
+          onSecondaryAction={() => window.location.reload()} 
+        />
       )}
     </div>
   );
