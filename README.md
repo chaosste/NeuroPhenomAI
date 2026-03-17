@@ -17,13 +17,13 @@
 ** 📝 Use the trained AI research interviewer or record and transcribe **
 
 
-<img src="Images/neurophenom-ai-report-quick.gif" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" />
+<img src="Images/neurophenom-ai-report-quick.gif" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" style="margin-top: 50px;" />
 
 
 ** 🧩 AI analyses and codifies each interview **
 
 
-<img src="Images/neurophenom-ai-codification.gif" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" />
+<img src="Images/neurophenom-ai-codification.gif" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" style="margin-top: 50px;" />
 
 
 
