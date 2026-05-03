@@ -24,7 +24,8 @@ import SettingsMenu from './components/SettingsMenu';
 import StandaloneRecorder from './components/StandaloneRecorder';
 import AppFallback from './components/AppFallback';
 import Button from './components/Button';
-import { analyzeInterview } from './services/geminiService';
+import { analyzeInterview, transcribeInterviewAudio } from './services/geminiService';
+import { persistInterviewRecording } from './services/localAudioPersistence';
 import { Artifact } from './constants';
 
 const App: React.FC = () => {
@@ -296,8 +297,34 @@ const App: React.FC = () => {
   };
 
   const handleRecordComplete = async (transcriptText: string, audioBlob: Blob) => {
+    const sessionId = crypto.randomUUID();
+    try {
+      await persistInterviewRecording(audioBlob, sessionId);
+    } catch (e) {
+      console.warn('Local recording save skipped or failed.', e);
+    }
+
+    let text = transcriptText.trim();
+    if (!text) {
+      try {
+        text = (await transcribeInterviewAudio(audioBlob)).trim();
+      } catch (e) {
+        console.error(e);
+        alert(
+          'CAPTURE_SAVED_LOCALLY: Live transcription was empty and the backup audio transcript failed. Check your API key and network, then retry from the saved file if needed.'
+        );
+        setView('home');
+        return;
+      }
+    }
+    if (!text) {
+      alert('No speech was detected in this capture. Try again with clearer audio.');
+      setView('home');
+      return;
+    }
+
     const audioUrl = URL.createObjectURL(audioBlob);
-    await processTranscriptionResult(transcriptText, 'RECORDED', audioUrl);
+    await processTranscriptionResult(text, 'RECORDED', audioUrl);
   };
 
   const deleteSession = (id: string, e: React.MouseEvent) => {

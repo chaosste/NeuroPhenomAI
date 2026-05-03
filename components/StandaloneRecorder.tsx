@@ -17,10 +17,25 @@ const StandaloneRecorder: React.FC<StandaloneRecorderProps> = ({ apiKey, onCompl
   const [error, setError] = useState<string | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recorderMimeRef = useRef<string>('audio/webm');
+  const micStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const sessionRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const transcriptRef = useRef<string>('');
+
+  const pickRecorderMimeType = (): string => {
+    const candidates = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+      'audio/mp4'
+    ];
+    for (const c of candidates) {
+      if (MediaRecorder.isTypeSupported(c)) return c;
+    }
+    return '';
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -58,8 +73,16 @@ const StandaloneRecorder: React.FC<StandaloneRecorderProps> = ({ apiKey, onCompl
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      mediaRecorderRef.current = new MediaRecorder(stream);
+      micStreamRef.current = stream;
+
+      const mimeType = pickRecorderMimeType();
+      recorderMimeRef.current = mimeType || 'audio/webm';
+      mediaRecorderRef.current = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      if (mediaRecorderRef.current.mimeType) {
+        recorderMimeRef.current = mediaRecorderRef.current.mimeType;
+      }
       audioChunksRef.current = [];
       mediaRecorderRef.current.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
@@ -98,27 +121,73 @@ const StandaloneRecorder: React.FC<StandaloneRecorderProps> = ({ apiKey, onCompl
           },
         },
         config: {
-          responseModalities: [Modality.AUDIO],
+          responseModalities: [Modality.TEXT],
           inputAudioTranscription: {},
-          systemInstruction: "Transcribe the following interview precisely. Do not speak or generate audio output."
+          systemInstruction:
+            'You are a silent transcription engine for a clinical interview. Transcribe the speaker accurately. Do not generate spoken audio or conversational replies; text transcription only.'
         },
       });
       sessionRef.current = await sessionPromise;
     } catch (err) {
+      try {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+      } catch {
+        /* ignore */
+      }
+      micStreamRef.current?.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
+      mediaRecorderRef.current = null;
+      audioChunksRef.current = [];
       setError("HARDWARE_ERROR");
     }
   };
 
   const stopRecording = () => {
     setIsProcessing(true);
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        if (sessionRef.current) sessionRef.current.close();
-        onComplete(transcriptRef.current, audioBlob);
-      };
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    const rec = mediaRecorderRef.current;
+    if (!rec || rec.state === 'inactive') {
+      micStreamRef.current?.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
+      if (sessionRef.current) {
+        try {
+          sessionRef.current.close();
+        } catch {
+          /* ignore */
+        }
+        sessionRef.current = null;
+      }
+      const audioBlob = new Blob(audioChunksRef.current, { type: recorderMimeRef.current || 'audio/webm' });
+      setIsProcessing(false);
+      onComplete(transcriptRef.current, audioBlob);
+      return;
+    }
+
+    rec.onstop = () => {
+      const mime = recorderMimeRef.current || rec.mimeType || 'audio/webm';
+      const audioBlob = new Blob(audioChunksRef.current, { type: mime });
+      micStreamRef.current?.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
+      if (sessionRef.current) {
+        try {
+          sessionRef.current.close();
+        } catch {
+          /* ignore */
+        }
+        sessionRef.current = null;
+      }
+      setIsProcessing(false);
+      onComplete(transcriptRef.current, audioBlob);
+    };
+    try {
+      rec.stop();
+    } catch {
+      micStreamRef.current?.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
+      setIsProcessing(false);
+      const audioBlob = new Blob(audioChunksRef.current, { type: recorderMimeRef.current || 'audio/webm' });
+      onComplete(transcriptRef.current, audioBlob);
     }
   };
 

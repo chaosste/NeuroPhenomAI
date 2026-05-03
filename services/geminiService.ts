@@ -1,17 +1,70 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import {
+  GoogleGenAI,
+  Type,
+  createPartFromBase64,
+  createPartFromText,
+  createUserContent
+} from "@google/genai";
 import { AnalysisResult, LanguagePreference } from "../types";
 
-// Get API key from localStorage
 const getApiKey = (): string => {
+  try {
+    const fromSession = sessionStorage.getItem('neuro_phenom_api_key')?.trim();
+    if (fromSession) return fromSession;
+  } catch {
+    /* private mode */
+  }
   const savedSettings = localStorage.getItem('neuro_phenom_settings');
   if (savedSettings) {
     try {
-      const settings = JSON.parse(savedSettings);
-      if (settings.apiKey) return settings.apiKey;
-    } catch (e) {}
+      const parsed = JSON.parse(savedSettings);
+      if (typeof parsed?.apiKey === 'string' && parsed.apiKey.trim()) return parsed.apiKey.trim();
+    } catch {
+      /* ignore */
+    }
   }
   return '';
+};
+
+const blobToBase64 = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error('Unexpected FileReader result'));
+        return;
+      }
+      const comma = result.indexOf(',');
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'));
+    reader.readAsDataURL(blob);
+  });
+
+/** Offline pass: send the captured clip to Gemini as inline audio for a verbatim transcript. */
+export const transcribeInterviewAudio = async (audioBlob: Blob): Promise<string> => {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error("Please add your Gemini API key in Settings");
+  }
+  const mimeType =
+    audioBlob.type && audioBlob.type !== 'application/octet-stream'
+      ? audioBlob.type
+      : 'audio/webm';
+  const ai = new GoogleGenAI({ apiKey });
+  const audioBase64 = await blobToBase64(audioBlob);
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.0-flash',
+    contents: createUserContent([
+      createPartFromText(
+        'Transcribe this clinical interview audio verbatim. Output only the transcribed speech, no preamble or commentary.'
+      ),
+      createPartFromBase64(audioBase64, mimeType)
+    ])
+  });
+  return (response.text ?? '').trim();
 };
 
 export const getWelcomeMessage = async (language: LanguagePreference): Promise<string> => {
