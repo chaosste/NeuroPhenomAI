@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LiveServerMessage, Modality } from '@google/genai';
+import {
+  ActivityHandling,
+  LiveServerMessage,
+  Modality,
+  ThinkingLevel
+} from '@google/genai';
 import { Settings, SpeakerSegment } from '../types';
 import { NEURO_PHENOM_SYSTEM_INSTRUCTION } from '../constants';
 import Button from './Button';
@@ -24,6 +29,46 @@ interface LiveInterviewSessionProps {
   onCancel: () => void;
 }
 
+const classifyCloseReason = (
+  detail: string
+): { key?: 'fail'; network?: 'fail'; message: string; userAction?: string } => {
+  const lowered = detail.toLowerCase();
+  if (
+    lowered.includes('referer') ||
+    lowered.includes('referrer') ||
+    lowered.includes('api_key_http_referrer') ||
+    (lowered.includes('1008') && lowered.includes('blocked'))
+  ) {
+    return {
+      key: 'fail',
+      message:
+        'Gemini API key has HTTP referrer restrictions. Live WebSockets often send an empty Referer, so Google blocks the key.',
+      userAction:
+        'In Google AI Studio → API key → Application restrictions, set to None (or create an unrestricted key for this app). Then paste the key in Settings and retry.'
+    };
+  }
+  if (
+    lowered.includes('key') ||
+    lowered.includes('auth') ||
+    lowered.includes('permission') ||
+    lowered.includes('403') ||
+    lowered.includes('unauthorized')
+  ) {
+    return { key: 'fail', message: 'API key invalid, unauthorized, or missing Live model access.' };
+  }
+  if (
+    lowered.includes('not found') ||
+    lowered.includes('not supported') ||
+    lowered.includes('model')
+  ) {
+    return {
+      network: 'fail',
+      message: 'Live model unavailable for this key. Check Gemini API access for Live audio.'
+    };
+  }
+  return { network: 'fail', message: detail || 'Network/session link interrupted.' };
+};
+
 const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
   settings,
   onComplete,
@@ -34,6 +79,7 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
     { speaker: 'AI' | 'Interviewee'; text: string; id: string }[]
   >([]);
   const [error, setError] = useState<string | null>(null);
+  const [errorAction, setErrorAction] = useState<string | null>(null);
   const [inputLevel, setInputLevel] = useState(0);
   const [diagnostics, setDiagnostics] = useState({
     key: 'unknown',
@@ -53,6 +99,8 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
   const audioChunksRef = useRef<Blob[]>([]);
   const levelMonitorRef = useRef<InputLevelMonitor | null>(null);
   const transcriptHistoryRef = useRef<SpeakerSegment[]>([]);
+  const playbackSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const intentionalCloseRef = useRef(false);
 
   const currentTurnRef = useRef<{
     speaker: 'AI' | 'Interviewee' | null;
@@ -77,6 +125,7 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
 
   useEffect(() => {
     return () => {
+      intentionalCloseRef.current = true;
       cleanupAudio();
     };
   }, []);
@@ -109,11 +158,30 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
     return buffer;
   };
 
+  const stopPlayback = () => {
+    for (const source of playbackSourcesRef.current) {
+      try {
+        source.stop();
+      } catch {
+        /* ignore */
+      }
+      try {
+        source.disconnect();
+      } catch {
+        /* ignore */
+      }
+    }
+    playbackSourcesRef.current.clear();
+    const ctx = audioContextRef.current;
+    nextStartTimeRef.current = ctx ? ctx.currentTime : 0;
+  };
+
   const cleanupAudio = () => {
     if (connectTimeoutRef.current) {
       window.clearTimeout(connectTimeoutRef.current);
       connectTimeoutRef.current = null;
     }
+    stopPlayback();
     levelMonitorRef.current?.stop();
     levelMonitorRef.current = null;
     pcmCaptureRef.current?.stop();
@@ -132,6 +200,22 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
     inputAudioContextRef.current = null;
     void audioContextRef.current?.close().catch(() => undefined);
     audioContextRef.current = null;
+    setInputLevel(0);
+  };
+
+  const failSession = (detail: string) => {
+    setIsActive(false);
+    cleanupAudio();
+    const classified = classifyCloseReason(detail);
+    setError(classified.message);
+    setErrorAction(classified.userAction ?? null);
+    setDiagnostics((prev) => ({
+      ...prev,
+      key: classified.key ?? prev.key,
+      network: classified.network ?? prev.network,
+      session: 'error',
+      message: classified.message
+    }));
   };
 
   const startLocalRecording = (stream: MediaStream) => {
@@ -198,6 +282,12 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
         });
         return;
       }
+
+      intentionalCloseRef.current = false;
+      cleanupAudio();
+      setError(null);
+      setErrorAction(null);
+      setIsActive(false);
       setDiagnostics({
         key: 'ok',
         mic: 'checking',
@@ -208,13 +298,7 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
 
       if (connectTimeoutRef.current) window.clearTimeout(connectTimeoutRef.current);
       connectTimeoutRef.current = window.setTimeout(() => {
-        setError('Connection timeout. Check Gemini API key, mic permission, or network.');
-        setDiagnostics((prev) => ({
-          ...prev,
-          network: 'fail',
-          session: 'error',
-          message: 'Connection timeout. Check network/API key and retry.'
-        }));
+        failSession('Connection timeout. Check Gemini API key, mic permission, or network.');
       }, 15000);
 
       const ai = createGeminiClient(settings.apiKey);
@@ -223,6 +307,7 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
       inputAudioContextRef.current = inputAudioContext;
       audioContextRef.current = outputAudioContext;
       sessionStartTimeRef.current = Date.now();
+      nextStartTimeRef.current = 0;
 
       const stream = await getMicrophoneStream({
         audioInputDeviceId: settings.audioInputDeviceId,
@@ -267,14 +352,23 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
               message: 'Live session connected. Prefer headphones to reduce echo.'
             });
             void startPcmCapture(inputAudioContext, stream, (pcmBlob) => {
-              sessionPromise.then((s) => s.sendRealtimeInput({ media: pcmBlob }));
+              sessionPromise.then((s) => s.sendRealtimeInput({ audio: pcmBlob }));
             }).then((handle) => {
               pcmCaptureRef.current = handle;
             });
           },
           onmessage: async (message: LiveServerMessage) => {
-            const audioData = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-            if (audioData) {
+            const content = message.serverContent;
+            if (!content) return;
+
+            if (content.interrupted) {
+              stopPlayback();
+            }
+
+            const parts = content.modelTurn?.parts ?? [];
+            for (const part of parts) {
+              const audioData = part.inlineData?.data;
+              if (!audioData) continue;
               nextStartTimeRef.current = Math.max(
                 nextStartTimeRef.current,
                 outputAudioContext.currentTime
@@ -288,60 +382,57 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
               const source = outputAudioContext.createBufferSource();
               source.buffer = audioBuffer;
               source.connect(outputNode);
+              playbackSourcesRef.current.add(source);
+              source.onended = () => {
+                playbackSourcesRef.current.delete(source);
+              };
               source.start(nextStartTimeRef.current);
               nextStartTimeRef.current += audioBuffer.duration;
             }
 
-            if (message.serverContent?.outputTranscription) {
-              updateIncrementalTranscript(
-                'AI',
-                message.serverContent.outputTranscription.text ?? ''
-              );
-            } else if (message.serverContent?.inputTranscription) {
+            if (content.outputTranscription) {
+              updateIncrementalTranscript('AI', content.outputTranscription.text ?? '');
+            }
+            if (content.inputTranscription) {
               updateIncrementalTranscript(
                 'Interviewee',
-                message.serverContent.inputTranscription.text ?? ''
+                content.inputTranscription.text ?? ''
               );
             }
 
-            if (message.serverContent?.turnComplete) {
+            if (content.turnComplete) {
               finalizeTurn();
             }
           },
           onerror: (e) => {
+            if (intentionalCloseRef.current) return;
             const detail =
-              typeof (e as any)?.message === 'string'
-                ? (e as any).message
+              typeof (e as { message?: string })?.message === 'string'
+                ? (e as { message: string }).message
                 : 'Unknown transport error';
-            setError(`Link interrupt: ${detail}`);
-            const lowered = detail.toLowerCase();
-            if (
-              lowered.includes('key') ||
-              lowered.includes('auth') ||
-              lowered.includes('permission')
-            ) {
-              setDiagnostics((prev) => ({
-                ...prev,
-                key: 'fail',
-                session: 'error',
-                message: 'API key invalid or unauthorized.'
-              }));
-            } else {
-              setDiagnostics((prev) => ({
-                ...prev,
-                network: 'fail',
-                session: 'error',
-                message: 'Network/session link interrupted.'
-              }));
-            }
+            failSession(`Link interrupt: ${detail}`);
           },
-          onclose: () => {
+          onclose: (e) => {
             setIsActive(false);
-            setDiagnostics((prev) =>
-              prev.session === 'error'
-                ? prev
-                : { ...prev, session: 'closed', message: 'Session closed.' }
-            );
+            if (intentionalCloseRef.current) {
+              cleanupAudio();
+              setDiagnostics((prev) =>
+                prev.session === 'error'
+                  ? prev
+                  : { ...prev, session: 'closed', message: 'Session closed.' }
+              );
+              return;
+            }
+            const closeEvent = e as CloseEvent | undefined;
+            const reasonParts = [
+              closeEvent?.code != null ? `code ${closeEvent.code}` : null,
+              closeEvent?.reason ? String(closeEvent.reason) : null
+            ].filter(Boolean);
+            const detail =
+              reasonParts.length > 0
+                ? `Session closed unexpectedly (${reasonParts.join(', ')})`
+                : 'Session closed unexpectedly after connect.';
+            failSession(detail);
           }
         },
         config: {
@@ -349,6 +440,13 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
           outputAudioTranscription: transcriptionConfig,
           inputAudioTranscription: transcriptionConfig,
           speechConfig,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+          realtimeInputConfig: {
+            automaticActivityDetection: {
+              silenceDurationMs: 1800
+            },
+            activityHandling: ActivityHandling.NO_INTERRUPTION
+          },
           systemInstruction: NEURO_PHENOM_SYSTEM_INSTRUCTION(
             settings.language,
             settings.interviewMode,
@@ -396,6 +494,7 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
   };
 
   const endSession = async () => {
+    intentionalCloseRef.current = true;
     finalizeTurn();
     if (connectTimeoutRef.current) {
       window.clearTimeout(connectTimeoutRef.current);
@@ -548,14 +647,37 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
         )}
 
         {error && (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center p-16 border-2 border-black bg-white shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]">
-              <p className="text-[12px] font-black uppercase tracking-widest mb-8 text-red-600">
-                LINK_FAILURE: {error}
+          <div className="flex-1 flex items-center justify-center p-8">
+            <div className="text-center p-12 md:p-16 border-2 border-black bg-white shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] max-w-xl">
+              <p className="text-[12px] font-black uppercase tracking-widest mb-4 text-red-600">
+                LINK_FAILURE
               </p>
-              <Button size="md" onClick={() => window.location.reload()}>
-                Reset Protocol
-              </Button>
+              <p className="text-sm font-medium text-neutral-800 mb-4 leading-relaxed">{error}</p>
+              {errorAction && (
+                <p className="text-[11px] text-neutral-500 mb-8 leading-relaxed">{errorAction}</p>
+              )}
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Button
+                  size="md"
+                  onClick={() => {
+                    setError(null);
+                    setErrorAction(null);
+                    setDiagnostics({
+                      key: 'unknown',
+                      mic: 'unknown',
+                      network: 'unknown',
+                      session: 'idle',
+                      message:
+                        'Ready to connect. Use headphones when possible; Chrome recommended.'
+                    });
+                  }}
+                >
+                  Try Again
+                </Button>
+                <Button size="md" variant="outline" onClick={() => window.location.reload()}>
+                  Reset Protocol
+                </Button>
+              </div>
             </div>
           </div>
         )}

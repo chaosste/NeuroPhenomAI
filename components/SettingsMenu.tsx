@@ -335,7 +335,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({
             <Database size={18} className="text-slate-400" />
             <div className="flex-1">
               <p className="text-sm font-medium text-slate-700">Persist Session Data</p>
-              <p className="text-xs text-slate-500">Stores transcripts locally</p>
+              <p className="text-xs text-slate-500">Stores transcripts and recordings in this browser</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
@@ -363,6 +363,11 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({
               placeholder="Enter your API key"
               className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/30"
             />
+            <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
+              For Live interview, set the key&apos;s Application restrictions to{' '}
+              <strong>None</strong>. HTTP referrer restrictions block browser WebSockets
+              (empty Referer).
+            </p>
             <a
               href="https://aistudio.google.com/apikey"
               target="_blank"

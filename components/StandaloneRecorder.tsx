@@ -45,6 +45,7 @@ const StandaloneRecorder: React.FC<StandaloneRecorderProps> = ({
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const pcmCaptureRef = useRef<PcmCaptureHandle | null>(null);
   const levelMonitorRef = useRef<InputLevelMonitor | null>(null);
+  const intentionalCloseRef = useRef(false);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -54,6 +55,7 @@ const StandaloneRecorder: React.FC<StandaloneRecorderProps> = ({
 
   useEffect(() => {
     return () => {
+      intentionalCloseRef.current = true;
       cleanup();
     };
   }, []);
@@ -77,6 +79,11 @@ const StandaloneRecorder: React.FC<StandaloneRecorderProps> = ({
     }
 
     try {
+      intentionalCloseRef.current = false;
+      cleanup();
+      setError(null);
+      setIsRecording(false);
+
       const stream = await getMicrophoneStream({
         audioInputDeviceId: settings.audioInputDeviceId,
         studioMicMode: settings.studioMicMode
@@ -111,7 +118,7 @@ const StandaloneRecorder: React.FC<StandaloneRecorderProps> = ({
           onopen: () => {
             void startPcmCapture(inputAudioContext, stream, (pcmBlob) => {
               sessionPromise.then((s) => {
-                s.sendRealtimeInput({ media: pcmBlob });
+                s.sendRealtimeInput({ audio: pcmBlob });
               });
             }).then((handle) => {
               pcmCaptureRef.current = handle;
@@ -126,8 +133,30 @@ const StandaloneRecorder: React.FC<StandaloneRecorderProps> = ({
             }
           },
           onerror: (e) => {
+            if (intentionalCloseRef.current) return;
             console.error('Live Link Error:', e);
-            setError('LINK_DROPPED');
+            setIsRecording(false);
+            cleanup();
+            const detail =
+              typeof (e as { message?: string })?.message === 'string'
+                ? (e as { message: string }).message
+                : 'LINK_DROPPED';
+            setError(detail);
+          },
+          onclose: (e) => {
+            setIsRecording(false);
+            if (intentionalCloseRef.current) {
+              cleanup();
+              return;
+            }
+            cleanup();
+            const reason =
+              typeof (e as CloseEvent)?.reason === 'string' && (e as CloseEvent).reason
+                ? (e as CloseEvent).reason
+                : typeof (e as CloseEvent)?.code === 'number'
+                  ? `code ${(e as CloseEvent).code}`
+                  : 'SESSION_CLOSED';
+            setError((prev) => prev ?? `SESSION_CLOSED: ${reason}`);
           }
         },
         config: {
@@ -154,6 +183,7 @@ const StandaloneRecorder: React.FC<StandaloneRecorderProps> = ({
   };
 
   const stopRecording = () => {
+    intentionalCloseRef.current = true;
     setIsProcessing(true);
     levelMonitorRef.current?.stop();
     levelMonitorRef.current = null;

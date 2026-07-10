@@ -18,6 +18,10 @@ import {
 import Button from './Button';
 import { COLORS } from '../constants';
 import { analyzeInterview, transcribeInterviewAudio } from '../services/geminiService';
+import {
+  downloadInterviewRecording,
+  getCachedInterviewRecording
+} from '../services/localAudioPersistence';
 
 interface AnalysisViewProps {
   session: InterviewSession;
@@ -182,6 +186,24 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, apiKey, language, 
     URL.revokeObjectURL(href);
   };
 
+  const handleDownloadRecording = async () => {
+    try {
+      let blob: Blob | null = await getCachedInterviewRecording(session.id);
+      if (!blob && session.audioUrl) {
+        const response = await fetch(session.audioUrl);
+        blob = await response.blob();
+      }
+      if (!blob || blob.size === 0) {
+        alert('No recording is available to download for this session.');
+        return;
+      }
+      await downloadInterviewRecording(blob, session.id);
+    } catch (e) {
+      console.error(e);
+      alert('Could not download the recording.');
+    }
+  };
+
   const renderSegmentText = (text: string, segmentIndex: number) => {
     const segmentAnnotations = session.annotations
       .filter(a => a.segmentIndex === segmentIndex)
@@ -310,7 +332,12 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, apiKey, language, 
               Synthesis
             </button>
           </div>
-          <button className="p-3 hover:bg-neutral-100 rounded-xl transition-colors">
+          <button
+            type="button"
+            className="p-3 hover:bg-neutral-100 rounded-xl transition-colors"
+            title="Download recording"
+            onClick={() => void handleDownloadRecording()}
+          >
             <Download size={22} />
           </button>
         </div>

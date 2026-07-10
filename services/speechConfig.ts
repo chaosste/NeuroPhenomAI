@@ -1,8 +1,7 @@
 import { LanguagePreference, VoiceGender } from '../types';
 
-/** Gemini Developer API Live native-audio model (Dec 2025 preview). */
-export const LIVE_NATIVE_AUDIO_MODEL =
-  'gemini-2.5-flash-native-audio-preview-12-2025';
+/** Gemini Developer API Live native-audio model (recommended). */
+export const LIVE_NATIVE_AUDIO_MODEL = 'gemini-3.1-flash-live-preview';
 
 /** Multimodal model for offline verbatim transcription. */
 export const OFFLINE_TRANSCRIBE_MODEL = 'gemini-2.5-flash';
@@ -46,11 +45,8 @@ export const resolveVoiceName = (opts: {
   return opts.voiceGender === VoiceGender.MALE ? 'Puck' : 'Kore';
 };
 
-export const buildLiveTranscriptionConfig = (language: LanguagePreference) => ({
-  languageHints: {
-    languageCodes: [languageCodeForPreference(language)]
-  }
-});
+/** Live AudioTranscriptionConfig is currently an empty object in the SDK. */
+export const buildLiveTranscriptionConfig = (_language?: LanguagePreference) => ({});
 
 export const buildLiveSpeechConfig = (opts: {
   voiceName?: string;

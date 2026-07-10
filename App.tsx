@@ -25,7 +25,11 @@ import StandaloneRecorder from './components/StandaloneRecorder';
 import AppFallback from './components/AppFallback';
 import Button from './components/Button';
 import { analyzeInterview, transcribeInterviewAudio } from './services/geminiService';
-import { persistInterviewRecording } from './services/localAudioPersistence';
+import {
+  cacheInterviewRecording,
+  deleteCachedInterviewRecording,
+  getCachedInterviewRecording
+} from './services/localAudioPersistence';
 import { Artifact } from './constants';
 
 const App: React.FC = () => {
@@ -153,7 +157,20 @@ const App: React.FC = () => {
         if (parsed?.persistLocalData) {
           const savedSessions = localStorage.getItem('neuro_phenom_sessions');
           if (savedSessions) {
-            try { setSessions(JSON.parse(savedSessions)); } catch {}
+            try {
+              const parsedSessions = JSON.parse(savedSessions) as InterviewSession[];
+              void (async () => {
+                const hydrated = await Promise.all(
+                  parsedSessions.map(async (s) => {
+                    if (s.audioUrl && !s.audioUrl.startsWith('blob:')) return s;
+                    const blob = await getCachedInterviewRecording(s.id);
+                    if (!blob) return { ...s, audioUrl: undefined };
+                    return { ...s, audioUrl: URL.createObjectURL(blob) };
+                  })
+                );
+                setSessions(hydrated);
+              })();
+            } catch {}
           }
         }
       } catch {}
@@ -184,7 +201,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (settings.persistLocalData) {
-      localStorage.setItem('neuro_phenom_sessions', JSON.stringify(sessions));
+      // Never persist ephemeral blob: URLs — audio is rehydrated from IndexedDB.
+      const serializable = sessions.map(({ audioUrl: _audioUrl, ...rest }) => rest);
+      localStorage.setItem('neuro_phenom_sessions', JSON.stringify(serializable));
       return;
     }
     localStorage.removeItem('neuro_phenom_sessions');
@@ -252,12 +271,17 @@ const App: React.FC = () => {
   const handleStartRecording = () => setView('recorder');
   const handleTriggerUpload = () => fileInputRef.current?.click();
 
-  const processTranscriptionResult = async (transcriptText: string, type: 'AI_INTERVIEW' | 'RECORDED' | 'UPLOADED', audioUrl?: string) => {
+  const processTranscriptionResult = async (
+    transcriptText: string,
+    type: 'AI_INTERVIEW' | 'RECORDED' | 'UPLOADED',
+    audioUrl?: string,
+    sessionId?: string
+  ) => {
     setIsAnalyzing(true);
     try {
       const analysis = await analyzeInterview(transcriptText, settings.language);
       const newSession: InterviewSession = {
-        id: crypto.randomUUID(),
+        id: sessionId ?? crypto.randomUUID(),
         date: new Date().toISOString(),
         duration: 0, 
         type,
@@ -306,15 +330,16 @@ const App: React.FC = () => {
       .join('\n')
       .trim();
 
+    const sessionId = crypto.randomUUID();
     let audioUrl: string | undefined;
     if (audioBlob && audioBlob.size > 0) {
-      const sessionId = crypto.randomUUID();
-      try {
-        await persistInterviewRecording(audioBlob, sessionId);
-      } catch (e) {
-        console.warn('Local recording save skipped or failed.', e);
-      }
+      // Keep audio in-app for analysis/playback; never force a Save dialog here.
       audioUrl = URL.createObjectURL(audioBlob);
+      try {
+        await cacheInterviewRecording(sessionId, audioBlob);
+      } catch (e) {
+        console.warn('In-app recording cache skipped or failed.', e);
+      }
 
       if (!transcriptText) {
         try {
@@ -336,15 +361,16 @@ const App: React.FC = () => {
       return;
     }
 
-    await processTranscriptionResult(transcriptText, 'AI_INTERVIEW', audioUrl);
+    await processTranscriptionResult(transcriptText, 'AI_INTERVIEW', audioUrl, sessionId);
   };
 
   const handleRecordComplete = async (transcriptText: string, audioBlob: Blob) => {
     const sessionId = crypto.randomUUID();
+    const audioUrl = URL.createObjectURL(audioBlob);
     try {
-      await persistInterviewRecording(audioBlob, sessionId);
+      await cacheInterviewRecording(sessionId, audioBlob);
     } catch (e) {
-      console.warn('Local recording save skipped or failed.', e);
+      console.warn('In-app recording cache skipped or failed.', e);
     }
 
     let text = transcriptText.trim();
@@ -354,7 +380,7 @@ const App: React.FC = () => {
       } catch (e) {
         console.error(e);
         alert(
-          'CAPTURE_SAVED_LOCALLY: Live transcription was empty and the backup audio transcript failed. Check your API key and network, then retry from the saved file if needed.'
+          'Live transcription was empty and the backup audio transcript failed. Check your API key and network, then retry.'
         );
         setView('home');
         return;
@@ -366,13 +392,13 @@ const App: React.FC = () => {
       return;
     }
 
-    const audioUrl = URL.createObjectURL(audioBlob);
-    await processTranscriptionResult(text, 'RECORDED', audioUrl);
+    await processTranscriptionResult(text, 'RECORDED', audioUrl, sessionId);
   };
 
   const deleteSession = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm("DELETE REPOSITORY? This action cannot be undone.")) {
+      void deleteCachedInterviewRecording(id);
       setSessions(prev => prev.filter(s => s.id !== id));
       if (activeSession?.id === id) { setView('home'); setActiveSession(null); }
     }
