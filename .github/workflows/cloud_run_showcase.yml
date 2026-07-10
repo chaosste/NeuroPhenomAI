@@ -1,22 +1,9 @@
 name: Deploy Cloud Run showcase
 
+# Manual by default until GCP Workload Identity Federation secrets are configured.
+# Local/one-shot deploy already works via: gcloud builds submit --config=cloudbuild.yaml
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "server.js"
-      - "server/public/**"
-      - "Dockerfile"
-      - "cloudbuild.yaml"
-      - "services/geminiClient.ts"
-      - "services/geminiService.ts"
-      - "components/LiveInterviewSession.tsx"
-      - "components/StandaloneRecorder.tsx"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/cloud_run_showcase.yml"
 
 permissions:
   contents: read
@@ -33,6 +20,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Require GCP WIF secrets
+        env:
+          WIF: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          SA: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${WIF}" || -z "${SA}" ]]; then
+            echo "Missing GCP_WORKLOAD_IDENTITY_PROVIDER / GCP_SERVICE_ACCOUNT."
+            echo "Deploy locally with: gcloud builds submit --project=microphenom-ai --config=cloudbuild.yaml --substitutions=COMMIT_SHA=\$(git rev-parse HEAD) ."
+            echo "See docs/CLOUD_RUN_SHOWCASE.md"
+            exit 1
+          fi
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
