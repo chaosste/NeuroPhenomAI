@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Env files (allow committed template; secrets stay local)
+.env
+.env.*
+!.env.example
+
+# Graphify knowledge graph (generated)
+graphify-out/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

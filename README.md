@@ -4,6 +4,8 @@
 
 🎚️ High-Fidelity Clinical Interface for Neurophenomenology
 
+**Live demo:** [neurophenomai.newpsychonaut.com](https://www.neurophenomai.newpsychonaut.com/)
+
 <img src="Images/neurophenom-ai-report-quick.gif" width="800" alt="NeuroPhenom AI — microphenomenology interview and analysis platform" style="margin-bottom: 50px;" />
 
 ꩜ Map pre-reflective subjective experience through granular interview techniques.
@@ -36,7 +38,9 @@ Featuring a stark black-and-white minimalist design, the interface stays out of 
 
 ## 🗝️ Requirements
 
-Add Google Gemini API key in settings menu. Best performance in Chrome browser.
+- Node.js 22 (Volta-pinned in `package.json`)
+- Google Gemini API key (entered in the in-app Settings menu; stored in the browser session)
+- Chrome recommended for live interview audio
 
 ## ✨ Features
 
@@ -54,31 +58,54 @@ Add Google Gemini API key in settings menu. Best performance in Chrome browser.
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React + TypeScript, Vite |
-| AI | Google Gemini API |
-| Design | Minimalist black/white UI |
-| Deployment | GitHub / Azure |
+| Frontend | React 19 + TypeScript, Vite |
+| Client AI | Google Gemini API (BYOK via Settings) |
+| Production server | Express (`server.js`) serving `dist/` |
+| Optional server AI | Azure OpenAI / Foundry (`/api/*` — not used by the UI today) |
+| Deployment | Azure App Service (primary) |
 
-## 🏎️ Installation
+## 🏗️ Architecture
+
+```
+index.html → index.tsx → App.tsx
+                           ├─ LiveInterviewSession  ─┐
+                           ├─ AnalysisView          ├─→ services/geminiService (browser Gemini)
+                           └─ StandaloneRecorder    ─┘
+
+npm start → server.js → static dist/ + /api/health|/api/welcome|/api/analyze (Azure Foundry)
+```
+
+- **Today:** the React app talks to Gemini in the browser with your own API key (privacy-first BYOK).
+- **Server Foundry routes** in `server.js` are ready for a future server-mediated path; the UI does not call them yet.
+- Methodology baseline: [`docs/knowledge/core/NP_CANONICAL_SPEC.md`](docs/knowledge/core/NP_CANONICAL_SPEC.md)
+- Public one-pager: [`docs/github-pages/index.html`](docs/github-pages/index.html)
+
+## 🏎️ Quick start
 
 ```bash
-# Clone the repository
 git clone https://github.com/chaosste/NeuroPhenomAI.git
 cd NeuroPhenomAI
-
-# Install dependencies
 npm install
-
-# Configure your Gemini API key
-
-# Run development server
 npm run dev
 ```
+
+1. Open the app (Vite defaults to `http://localhost:8080`).
+2. Open **Settings** and paste your Google Gemini API key.
+3. Start a live interview or use the standalone recorder.
+
+Production-style local run (build + Express):
+
+```bash
+npm run build
+npm start
+```
+
+Server env vars (optional Azure Foundry, rate limits) are documented in [`.env.example`](.env.example).
 
 ## 🦞 Workflow Protocol
 
 Use the worktree/branch protocol in:
-- `docs/WORKTREE_WORKFLOW_PROTOCOL.md`
+- [`docs/WORKTREE_WORKFLOW_PROTOCOL.md`](docs/WORKTREE_WORKFLOW_PROTOCOL.md)
 
 Operational canon:
 - <https://github.com/chaosste/ops-playbooks>
