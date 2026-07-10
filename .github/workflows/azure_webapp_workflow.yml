@@ -11,7 +11,7 @@ permissions:
   id-token: write
 
 env:
-  AZURE_WEBAPP_NAME: neurophenom
+  AZURE_WEBAPP_NAME: neurophenom-exeterai-bjjgnkmj25upk
   NODE_VERSION: "22.x"
 
 jobs:

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
+import { LiveServerMessage, Modality } from '@google/genai';
 import { Settings, SpeakerSegment } from '../types';
 import { NEURO_PHENOM_SYSTEM_INSTRUCTION } from '../constants';
 import Button from './Button';
@@ -16,6 +16,7 @@ import {
   buildLiveSpeechConfig,
   buildLiveTranscriptionConfig
 } from '../services/speechConfig';
+import { createGeminiClient, isShowcaseMode, resolveClientApiKey } from '../services/geminiClient';
 
 interface LiveInterviewSessionProps {
   settings: Settings;
@@ -183,14 +184,17 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
 
   const startSession = async () => {
     try {
-      if (!settings.apiKey) {
+      const clientKey = resolveClientApiKey(settings.apiKey);
+      if (!clientKey) {
         setError('Missing Gemini API Key');
         setDiagnostics({
           key: 'fail',
           mic: 'unknown',
           network: 'unknown',
           session: 'error',
-          message: 'Missing Gemini API key. Add it in settings.'
+          message: isShowcaseMode()
+            ? 'Showcase proxy misconfigured (no server GEMINI_API_KEY).'
+            : 'Missing Gemini API key. Add it in settings.'
         });
         return;
       }
@@ -213,7 +217,7 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
         }));
       }, 15000);
 
-      const ai = new GoogleGenAI({ apiKey: settings.apiKey });
+      const ai = createGeminiClient(settings.apiKey);
       const inputAudioContext = createAudioContext(16000);
       const outputAudioContext = createAudioContext(24000);
       inputAudioContextRef.current = inputAudioContext;

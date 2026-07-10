@@ -3,7 +3,13 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  // No API keys exposed - users provide their own via Settings UI
+  // Azure: users provide API keys in Settings.
+  // Cloud Run showcase: VITE_SHOWCASE_MODE=true + server GEMINI_API_KEY proxy.
+  define: {
+    'import.meta.env.VITE_SHOWCASE_MODE': JSON.stringify(
+      process.env.VITE_SHOWCASE_MODE === 'true' ? 'true' : ''
+    )
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

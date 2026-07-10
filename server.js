@@ -1,8 +1,10 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
 import fs from "fs";
+import http from "http";
 import path from "path";
 import { fileURLToPath } from "url";
+import { WebSocketServer, WebSocket } from "ws";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,7 +12,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.set("trust proxy", 1);
 const distPath = path.join(__dirname, "dist");
-const jsonParser = express.json({ limit: "2mb" });
+const publicPath = path.join(__dirname, "server", "public");
+const jsonParser = express.json({ limit: "50mb" });
 const welcomeRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: Number(process.env.WELCOME_RATE_LIMIT_MAX || 40),
@@ -32,12 +35,29 @@ const staticFallbackRateLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many requests. Please retry shortly." }
 });
+const proxyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.PROXY_RATE_LIMIT_MAX || 100),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Too many requests from this IP, please try again after 15 minutes"
+});
 
 const foundryEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
 const foundryApiKey = process.env.AZURE_OPENAI_API_KEY;
 const foundryDeployment = process.env.AZURE_OPENAI_DEPLOYMENT;
 const foundryApiVersion = process.env.AZURE_OPENAI_API_VERSION || "2024-10-21";
-const canonicalSpecPath = path.join(__dirname, "docs", "knowledge", "core", "NP_CANONICAL_SPEC.md");
+const geminiApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+const showcaseMode = process.env.SHOWCASE_MODE === "true";
+const externalApiBaseUrl = "https://generativelanguage.googleapis.com";
+const externalWsBaseUrl = "wss://generativelanguage.googleapis.com";
+const canonicalSpecPath = path.join(
+  __dirname,
+  "docs",
+  "knowledge",
+  "core",
+  "NP_CANONICAL_SPEC.md"
+);
 
 const fallbackCanonicalPolicy = `
 - Keep interview targets singular and concrete.
@@ -228,7 +248,9 @@ app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     service: "neurophenomai",
-    foundryConfigured: isFoundryConfigured()
+    foundryConfigured: isFoundryConfigured(),
+    showcaseMode: Boolean(showcaseMode && geminiApiKey),
+    geminiProxy: Boolean(geminiApiKey)
   });
 });
 
@@ -328,14 +350,175 @@ app.post("/api/analyze", analysisRateLimiter, jsonParser, async (req, res) => {
   }
 });
 
-app.use(express.static(distPath));
+/** Gemini HTTP proxy (Cloud Run showcase). Client uses baseUrl=/api-proxy. */
+app.use("/api-proxy", proxyLimiter, express.raw({ type: "*/*", limit: "50mb" }));
+app.use("/api-proxy", async (req, res, next) => {
+  if (req.headers.upgrade && String(req.headers.upgrade).toLowerCase() === "websocket") {
+    return next();
+  }
+  if (!geminiApiKey) {
+    res.status(503).json({ error: "Gemini proxy unavailable (GEMINI_API_KEY not set)." });
+    return;
+  }
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Goog-Api-Key"
+    );
+    res.sendStatus(200);
+    return;
+  }
 
-// SPA fallback (client-side routing) - Express 5 compatible
-app.get(/.*/, staticFallbackRateLimiter, (req, res) => {
-  res.sendFile(path.join(distPath, "index.html"));
+  try {
+    const targetPath = req.url.startsWith("/") ? req.url.slice(1) : req.url;
+    const apiUrl = `${externalApiBaseUrl}/${targetPath}`;
+    const headers = {
+      "X-Goog-Api-Key": geminiApiKey,
+      Accept: req.headers.accept || "*/*"
+    };
+    if (req.headers["content-type"] && ["POST", "PUT", "PATCH"].includes(req.method)) {
+      headers["Content-Type"] = req.headers["content-type"];
+    }
+
+    const upstream = await fetch(apiUrl, {
+      method: req.method,
+      headers,
+      body: ["GET", "HEAD"].includes(req.method) ? undefined : req.body
+    });
+
+    res.status(upstream.status);
+    upstream.headers.forEach((value, key) => {
+      if (!["transfer-encoding", "connection"].includes(key.toLowerCase())) {
+        res.setHeader(key, value);
+      }
+    });
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.send(buf);
+  } catch (error) {
+    console.error("Gemini HTTP proxy error:", error);
+    if (!res.headersSent) {
+      res.status(502).json({
+        error: "Proxy error",
+        message: error instanceof Error ? error.message : "unknown"
+      });
+    }
+  }
 });
 
-const port = process.env.PORT || 8080;
-app.listen(port, "0.0.0.0", () => {
+app.get("/service-worker.js", (_req, res) => {
+  res.sendFile(path.join(publicPath, "service-worker.js"));
+});
+app.use("/public", express.static(publicPath));
+
+const injectShowcaseScripts = (html) => {
+  if (!showcaseMode || !geminiApiKey) return html;
+  const tags = `<script src="/public/websocket-interceptor.js" defer></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+  });
+}
+</script>`;
+  if (html.includes("<head>")) {
+    return html.replace("<head>", `<head>${tags}`);
+  }
+  return `${tags}${html}`;
+};
+
+app.get("/", (_req, res) => {
+  const indexPath = path.join(distPath, "index.html");
+  fs.readFile(indexPath, "utf8", (err, html) => {
+    if (err) {
+      res.status(500).send("Build missing. Run npm run build.");
+      return;
+    }
+    res.type("html").send(injectShowcaseScripts(html));
+  });
+});
+
+app.use(express.static(distPath));
+
+app.get(/.*/, staticFallbackRateLimiter, (req, res) => {
+  if (req.path.startsWith("/api") || req.path.startsWith("/api-proxy")) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  const indexPath = path.join(distPath, "index.html");
+  fs.readFile(indexPath, "utf8", (err, html) => {
+    if (err) {
+      res.status(500).send("Build missing.");
+      return;
+    }
+    res.type("html").send(injectShowcaseScripts(html));
+  });
+});
+
+const port = Number(process.env.PORT || 8080);
+const server = http.createServer(app);
+
+if (geminiApiKey) {
+  const wss = new WebSocketServer({ noServer: true });
+  server.on("upgrade", (request, socket, head) => {
+    const requestUrl = new URL(request.url || "/", `http://${request.headers.host}`);
+    const pathname = requestUrl.pathname;
+    if (!pathname.startsWith("/api-proxy/")) {
+      socket.destroy();
+      return;
+    }
+
+    wss.handleUpgrade(request, socket, head, (clientWs) => {
+      const targetPathSegment = pathname.slice("/api-proxy".length);
+      const clientQuery = new URLSearchParams(requestUrl.search);
+      clientQuery.set("key", geminiApiKey);
+      const targetGeminiWsUrl = `${externalWsBaseUrl}${targetPathSegment}?${clientQuery.toString()}`;
+      const geminiWs = new WebSocket(targetGeminiWsUrl, {
+        protocol: request.headers["sec-websocket-protocol"]
+      });
+      const messageQueue = [];
+
+      geminiWs.on("open", () => {
+        while (messageQueue.length > 0) {
+          const message = messageQueue.shift();
+          if (geminiWs.readyState === WebSocket.OPEN) geminiWs.send(message);
+        }
+      });
+      geminiWs.on("message", (message) => {
+        if (clientWs.readyState === WebSocket.OPEN) clientWs.send(message);
+      });
+      geminiWs.on("close", (code, reason) => {
+        if (clientWs.readyState === WebSocket.OPEN || clientWs.readyState === WebSocket.CONNECTING) {
+          clientWs.close(code, reason.toString());
+        }
+      });
+      geminiWs.on("error", () => {
+        if (clientWs.readyState === WebSocket.OPEN || clientWs.readyState === WebSocket.CONNECTING) {
+          clientWs.close(1011, "Upstream WebSocket error");
+        }
+      });
+      clientWs.on("message", (message) => {
+        if (geminiWs.readyState === WebSocket.OPEN) geminiWs.send(message);
+        else if (geminiWs.readyState === WebSocket.CONNECTING) messageQueue.push(message);
+      });
+      clientWs.on("close", (code, reason) => {
+        if (geminiWs.readyState === WebSocket.OPEN || geminiWs.readyState === WebSocket.CONNECTING) {
+          geminiWs.close(code, reason.toString());
+        }
+      });
+      clientWs.on("error", () => {
+        if (geminiWs.readyState === WebSocket.OPEN || geminiWs.readyState === WebSocket.CONNECTING) {
+          geminiWs.close(1011, "Client WebSocket error");
+        }
+      });
+    });
+  });
+  console.log("Gemini Live WebSocket proxy enabled on /api-proxy/**");
+} else {
+  console.warn("GEMINI_API_KEY not set — showcase proxy disabled (Azure/user-key mode).");
+}
+
+server.listen(port, "0.0.0.0", () => {
   console.log(`Serving dist on port ${port}`);
 });

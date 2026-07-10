@@ -1,8 +1,12 @@
 # Production image: Vite build + Express (server.js)
-# Primary deploy path is Azure App Service via GitHub Actions; this image supports Cloud Run / local Docker.
+# Azure App Service uses GitHub Actions zip deploy.
+# Cloud Run showcase uses this Dockerfile with VITE_SHOWCASE_MODE=true + GEMINI_API_KEY.
 
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
+
+ARG VITE_SHOWCASE_MODE=false
+ENV VITE_SHOWCASE_MODE=$VITE_SHOWCASE_MODE
 
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -20,6 +24,7 @@ RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
 COPY server.js ./
+COPY server/public ./server/public
 COPY docs/knowledge/core ./docs/knowledge/core
 
 EXPOSE 8080

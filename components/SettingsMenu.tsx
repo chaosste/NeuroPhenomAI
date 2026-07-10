@@ -25,6 +25,7 @@ import {
   InputLevelMonitor
 } from '../services/audioCapture';
 import { GEMINI_VOICE_OPTIONS, resolveVoiceName } from '../services/speechConfig';
+import { isShowcaseMode } from '../services/geminiClient';
 
 interface SettingsMenuProps {
   settings: Settings;
@@ -349,6 +350,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({
 
           <div className="h-px bg-slate-100 my-1" />
 
+          {!isShowcaseMode() && (
           <div className="px-4 py-2.5">
             <div className="flex items-center gap-3 mb-2">
               <Key size={18} className="text-slate-400" />
@@ -370,6 +372,12 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({
               Get your free API key →
             </a>
           </div>
+          )}
+          {isShowcaseMode() && (
+            <div className="px-4 py-2.5 text-xs text-slate-500">
+              Showcase mode: Gemini is proxied by the server (no browser API key needed).
+            </div>
+          )}
 
           <div className="h-px bg-slate-100 my-1" />
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
+import { LiveServerMessage, Modality } from '@google/genai';
 import { Mic, Square, Loader2, Activity, Volume2, Wifi, AlertTriangle } from 'lucide-react';
 import Button from './Button';
 import { Settings } from '../types';
@@ -14,6 +14,7 @@ import {
   LIVE_NATIVE_AUDIO_MODEL,
   buildLiveTranscriptionConfig
 } from '../services/speechConfig';
+import { createGeminiClient, isShowcaseMode, resolveClientApiKey } from '../services/geminiClient';
 
 interface StandaloneRecorderProps {
   apiKey?: string;
@@ -69,9 +70,9 @@ const StandaloneRecorder: React.FC<StandaloneRecorderProps> = ({
   };
 
   const startRecording = async () => {
-    const normalizedApiKey = apiKey?.trim() || '';
+    const normalizedApiKey = resolveClientApiKey(apiKey);
     if (!normalizedApiKey) {
-      setError('MISSING_GEMINI_KEY');
+      setError(isShowcaseMode() ? 'SHOWCASE_PROXY_MISSING' : 'MISSING_GEMINI_KEY');
       return;
     }
 
@@ -99,7 +100,7 @@ const StandaloneRecorder: React.FC<StandaloneRecorderProps> = ({
       };
       mediaRecorderRef.current.start(1000);
 
-      const ai = new GoogleGenAI({ apiKey: normalizedApiKey });
+      const ai = createGeminiClient(apiKey);
       const inputAudioContext = createAudioContext(16000);
       inputAudioContextRef.current = inputAudioContext;
       const transcriptionConfig = buildLiveTranscriptionConfig(settings.language);

@@ -1,0 +1,73 @@
+name: Deploy Cloud Run showcase
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "server.js"
+      - "server/public/**"
+      - "Dockerfile"
+      - "cloudbuild.yaml"
+      - "services/geminiClient.ts"
+      - "services/geminiService.ts"
+      - "components/LiveInterviewSession.tsx"
+      - "components/StandaloneRecorder.tsx"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/cloud_run_showcase.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: microphenom-ai
+  GCP_REGION: us-west1
+  CLOUD_RUN_SERVICE: neurophenom-ai-showcase
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Submit Cloud Build
+        run: |
+          set -euo pipefail
+          gcloud builds submit \
+            --project="${{ env.GCP_PROJECT_ID }}" \
+            --config=cloudbuild.yaml \
+            --substitutions=COMMIT_SHA="${GITHUB_SHA}" \
+            .
+
+      - name: Health check
+        run: |
+          set -euo pipefail
+          URL="$(gcloud run services describe "${{ env.CLOUD_RUN_SERVICE }}" \
+            --project="${{ env.GCP_PROJECT_ID }}" \
+            --region="${{ env.GCP_REGION }}" \
+            --format='value(status.url)')"
+          echo "Checking ${URL}/api/health"
+          for i in {1..15}; do
+            if curl -sS --fail --max-time 20 "${URL}/api/health" | tee /tmp/cr_health.json; then
+              grep -Fq '"ok":true' /tmp/cr_health.json
+              exit 0
+            fi
+            sleep 8
+          done
+          exit 1

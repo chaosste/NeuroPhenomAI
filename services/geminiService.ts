@@ -1,6 +1,5 @@
 
 import {
-  GoogleGenAI,
   Type,
   createPartFromBase64,
   createPartFromText,
@@ -8,8 +7,10 @@ import {
 } from "@google/genai";
 import { AnalysisResult, LanguagePreference } from "../types";
 import { OFFLINE_TRANSCRIBE_MODEL } from "./speechConfig";
+import { createGeminiClient, isShowcaseMode, resolveClientApiKey } from "./geminiClient";
 
 const getApiKey = (): string => {
+  if (isShowcaseMode()) return resolveClientApiKey();
   try {
     const fromSession = sessionStorage.getItem('neuro_phenom_api_key')?.trim();
     if (fromSession) return fromSession;
@@ -54,7 +55,7 @@ export const transcribeInterviewAudio = async (audioBlob: Blob): Promise<string>
     audioBlob.type && audioBlob.type !== 'application/octet-stream'
       ? audioBlob.type
       : 'audio/webm';
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = createGeminiClient(apiKey);
   const audioBase64 = await blobToBase64(audioBlob);
   const response = await ai.models.generateContent({
     model: OFFLINE_TRANSCRIBE_MODEL,
@@ -77,7 +78,7 @@ export const getWelcomeMessage = async (language: LanguagePreference): Promise<s
     return "Please add your Gemini API key in Settings to begin.";
   }
   
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = createGeminiClient(apiKey);
   const prompt = `Generate a concise, professional clinical introduction for a neurophenomenology interview. 
   Focus on the 'how' of micro-experience. 
   Use ${language === LanguagePreference.UK ? 'UK' : 'US'} spelling and a sophisticated tone.`;
@@ -100,7 +101,7 @@ export const analyzeInterview = async (transcriptText: string, language: Languag
     throw new Error("Please add your Gemini API key in Settings");
   }
   
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = createGeminiClient(apiKey);
   
   const responseSchema = {
     type: Type.OBJECT,
