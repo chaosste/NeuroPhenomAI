@@ -17,10 +17,19 @@ export enum InterviewMode {
 export interface Settings {
   language: LanguagePreference;
   voiceGender: VoiceGender;
+  /** Explicit Gemini prebuilt voice; when unset, derived from language × gender. */
+  voiceName?: string;
   privacyContract: boolean;
   increasedSensitivityMode: boolean;
   interviewMode: InterviewMode;
   persistLocalData: boolean;
+  /** Preferred microphone deviceId from enumerateDevices. */
+  audioInputDeviceId?: string;
+  /**
+   * Studio / interface mic: keep echoCancellation, disable AGC and noise
+   * suppression so a clean USB mic is not over-processed.
+   */
+  studioMicMode?: boolean;
   apiKey?: string;
 }
 

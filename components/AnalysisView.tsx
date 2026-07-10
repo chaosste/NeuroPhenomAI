@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { AnalysisResult, Code, Annotation, InterviewSession } from '../types';
+import { AnalysisResult, Code, Annotation, InterviewSession, LanguagePreference } from '../types';
 import { 
   Play, 
   Pause, 
@@ -11,22 +11,28 @@ import {
   FileText,
   ArrowRight,
   Layout,
-  Layers
+  Layers,
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 import Button from './Button';
 import { COLORS } from '../constants';
+import { analyzeInterview, transcribeInterviewAudio } from '../services/geminiService';
 
 interface AnalysisViewProps {
   session: InterviewSession;
+  apiKey?: string;
+  language: LanguagePreference;
   onUpdate: (session: InterviewSession) => void;
 }
 
-const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
+const AnalysisView: React.FC<AnalysisViewProps> = ({ session, apiKey, language, onUpdate }) => {
   const [activeTab, setActiveTab] = useState<'coding' | 'report'>('coding');
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [selection, setSelection] = useState<{ segmentIndex: number; start: number; end: number; rect: DOMRect | null } | null>(null);
   const [newCodeName, setNewCodeName] = useState('');
+  const [isRetranscribing, setIsRetranscribing] = useState(false);
   
   const audioRef = useRef<HTMLAudioElement>(null);
 
@@ -50,6 +56,35 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
       if (isPlaying) audioRef.current.pause();
       else audioRef.current.play();
       setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleRetranscribe = async () => {
+    if (!session.audioUrl || isRetranscribing) return;
+    if (!apiKey?.trim()) {
+      alert('Add your Gemini API key in Settings to re-transcribe.');
+      return;
+    }
+    setIsRetranscribing(true);
+    try {
+      const response = await fetch(session.audioUrl);
+      const audioBlob = await response.blob();
+      const text = (await transcribeInterviewAudio(audioBlob)).trim();
+      if (!text) {
+        alert('No speech was detected in the saved recording.');
+        return;
+      }
+      const analysis = await analyzeInterview(text, language);
+      onUpdate({
+        ...session,
+        analysis,
+        annotations: []
+      });
+    } catch (e) {
+      console.error(e);
+      alert('Re-transcription failed. Check your API key and network.');
+    } finally {
+      setIsRetranscribing(false);
     }
   };
 
@@ -232,6 +267,22 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
           </div>
           <div className="h-10 w-[2px] bg-neutral-100 hidden lg:block" />
           <div className="hidden lg:flex gap-4">
+            {session.audioUrl && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest"
+                onClick={() => void handleRetranscribe()}
+                disabled={isRetranscribing}
+              >
+                {isRetranscribing ? (
+                  <Loader2 size={12} className="animate-spin mr-2" />
+                ) : (
+                  <RefreshCw size={12} className="mr-2" />
+                )}
+                Re-transcribe
+              </Button>
+            )}
             <Button variant="outline" size="sm" className="px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest">METADATA</Button>
             <Button
               variant="outline"

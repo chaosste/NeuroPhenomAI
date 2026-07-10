@@ -43,10 +43,12 @@ const App: React.FC = () => {
   const [settings, setSettings] = useState<Settings>({
     language: LanguagePreference.UK,
     voiceGender: VoiceGender.FEMALE,
+    voiceName: 'Zephyr',
     privacyContract: true,
     increasedSensitivityMode: false,
     interviewMode: InterviewMode.BEGINNER,
-    persistLocalData: false
+    persistLocalData: false,
+    studioMicMode: false
   });
 
   const encodeBase64 = (bytes: Uint8Array) => {
@@ -290,10 +292,51 @@ const App: React.FC = () => {
     event.target.value = '';
   };
 
-  const handleAIInterviewComplete = async (transcript: SpeakerSegment[]) => {
-    if (transcript.length === 0) { setView('home'); return; }
-    const transcriptText = transcript.map(t => `${t.speaker}: ${t.text}`).join('\n');
-    await processTranscriptionResult(transcriptText, 'AI_INTERVIEW');
+  const handleAIInterviewComplete = async (
+    transcript: SpeakerSegment[],
+    audioBlob?: Blob
+  ) => {
+    if (transcript.length === 0 && !audioBlob) {
+      setView('home');
+      return;
+    }
+
+    let transcriptText = transcript
+      .map((t) => `${t.speaker}: ${t.text}`)
+      .join('\n')
+      .trim();
+
+    let audioUrl: string | undefined;
+    if (audioBlob && audioBlob.size > 0) {
+      const sessionId = crypto.randomUUID();
+      try {
+        await persistInterviewRecording(audioBlob, sessionId);
+      } catch (e) {
+        console.warn('Local recording save skipped or failed.', e);
+      }
+      audioUrl = URL.createObjectURL(audioBlob);
+
+      if (!transcriptText) {
+        try {
+          transcriptText = (await transcribeInterviewAudio(audioBlob)).trim();
+        } catch (e) {
+          console.error(e);
+          alert(
+            'Live transcription was empty and offline re-transcription failed. Check your API key and network.'
+          );
+          setView('home');
+          return;
+        }
+      }
+    }
+
+    if (!transcriptText) {
+      alert('No speech was detected in this session.');
+      setView('home');
+      return;
+    }
+
+    await processTranscriptionResult(transcriptText, 'AI_INTERVIEW', audioUrl);
   };
 
   const handleRecordComplete = async (transcriptText: string, audioBlob: Blob) => {
@@ -542,16 +585,17 @@ const App: React.FC = () => {
         <div className="flex-1">
           {view === 'home' && renderHome()}
           {view === 'recorder' && (
-            <StandaloneRecorder 
+            <StandaloneRecorder
               apiKey={settings.apiKey}
-              onComplete={handleRecordComplete} 
-              onCancel={() => setView('home')} 
+              settings={settings}
+              onComplete={handleRecordComplete}
+              onCancel={() => setView('home')}
             />
           )}
           {view === 'ai-interview' && (
             <div className="p-0 h-[calc(100vh-96px)]">
-              <LiveInterviewSession 
-                settings={settings} 
+              <LiveInterviewSession
+                settings={settings}
                 onComplete={handleAIInterviewComplete}
                 onCancel={() => setView('home')}
               />
@@ -559,12 +603,14 @@ const App: React.FC = () => {
           )}
           {view === 'analysis' && activeSession && (
             <div className="p-0 h-[calc(100vh-96px)] flex flex-col animate-in slide-in-from-bottom-8 duration-700">
-              <AnalysisView 
-                session={activeSession} 
+              <AnalysisView
+                session={activeSession}
+                apiKey={settings.apiKey}
+                language={settings.language}
                 onUpdate={(updated) => {
                   setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
                   setActiveSession(updated);
-                }} 
+                }}
               />
             </div>
           )}

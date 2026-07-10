@@ -7,6 +7,7 @@ import {
   createUserContent
 } from "@google/genai";
 import { AnalysisResult, LanguagePreference } from "../types";
+import { OFFLINE_TRANSCRIBE_MODEL } from "./speechConfig";
 
 const getApiKey = (): string => {
   try {
@@ -56,10 +57,13 @@ export const transcribeInterviewAudio = async (audioBlob: Blob): Promise<string>
   const ai = new GoogleGenAI({ apiKey });
   const audioBase64 = await blobToBase64(audioBlob);
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: OFFLINE_TRANSCRIBE_MODEL,
     contents: createUserContent([
       createPartFromText(
-        'Transcribe this clinical interview audio verbatim. Output only the transcribed speech, no preamble or commentary.'
+        'Transcribe this clinical neurophenomenology interview audio verbatim. ' +
+          'Preserve filler words and hesitations. Do not summarize, translate, or add commentary. ' +
+          'If multiple speakers are clearly distinct, prefix lines with "Interviewer:" or "Interviewee:". ' +
+          'Output only the transcript.'
       ),
       createPartFromBase64(audioBase64, mimeType)
     ])

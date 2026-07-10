@@ -40,7 +40,7 @@ Featuring a stark black-and-white minimalist design, the interface stays out of 
 
 - Node.js 22 (Volta-pinned in `package.json`)
 - Google Gemini API key (entered in the in-app Settings menu; stored in the browser session)
-- Chrome recommended for live interview audio
+- Chrome recommended for live interview audio (Web Audio + Gemini Live). Select your USB microphone in Settings; prefer wired headphones during AI interviews.
 
 ## ✨ Features
 
@@ -51,7 +51,7 @@ Featuring a stark black-and-white minimalist design, the interface stays out of 
 - 🧩 **Structural Synthesis** — Map the architecture of subjective states
 - ✅ **Consent Protocols** — Built-in consent management for ethical research practice
 - 💾 **Local Storage** — Interviews saved locally for data sovereignty
-- ⚙️ **Configurable** — Language, voice gender, and interview mode settings
+- ⚙️ **Configurable** — Language, microphone device, AI voice, and interview mode settings
 - 🖤 **Minimalist Design** — Clean black/white aesthetic focused on the work
 
 ## 🥪 Tech Stack
