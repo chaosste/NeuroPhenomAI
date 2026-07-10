@@ -1,4 +1,11 @@
-# Cloud Run Showcase Deploy
+# Cloud Run Showcase Deploy (in-repo path)
+
+> **2026-07-10:** For demos that must match the working AI Studio applet, use the sibling repo  
+> [`NeuroPhenomAI-Showcase`](https://github.com/chaosste/NeuroPhenomAI-Showcase)  
+> (`/Users/stephenbeale/Projects/NeuroPhenomAI-Showcase`).  
+> Full context: [HANDOFF_2026-07-10.md](HANDOFF_2026-07-10.md).
+>
+> This document describes the **in-repo** Cloud Run adaptation of the main Azure app. It remains useful as reference, but it did not fully reproduce the gold AI Studio UX.
 
 Demo / showcase path for NeuroPhenomAI on Google Cloud Run with a **server-side Gemini Live proxy** (same pattern as the working AI Studio applet).
 

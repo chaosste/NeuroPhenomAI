@@ -41,7 +41,7 @@ Featuring a stark black-and-white minimalist design, the interface stays out of 
 - Node.js 22 (Volta-pinned in `package.json`)
 - Google Gemini API key (entered in the in-app Settings menu; stored in the browser session)
 - Chrome recommended for live interview audio (Web Audio + Gemini Live). Select your USB microphone in Settings; prefer wired headphones during AI interviews.
-- **Cloud Run showcase** (server-proxied Gemini, no browser API key): see [docs/CLOUD_RUN_SHOWCASE.md](docs/CLOUD_RUN_SHOWCASE.md). The legacy AI Studio applet remains at `https://neurophenom-ai-572556903588.us-west1.run.app/` until replaced by `neurophenom-ai-showcase`.
+- **Cloud Run demo clone** (exact AI Studio source): sibling repo [NeuroPhenomAI-Showcase](https://github.com/chaosste/NeuroPhenomAI-Showcase) — see [docs/HANDOFF_2026-07-10.md](docs/HANDOFF_2026-07-10.md). Gold applet: `https://neurophenom-ai-572556903588.us-west1.run.app/`. In-repo Cloud Run notes: [docs/CLOUD_RUN_SHOWCASE.md](docs/CLOUD_RUN_SHOWCASE.md).
 
 
 ## ✨ Features
