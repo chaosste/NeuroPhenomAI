@@ -3,5 +3,8 @@
   "description": "Professional neurophenomenology platform using Micro-phenomenology techniques and Gemini AI to map the micro-dynamics of subjective experience.",
   "requestFramePermissions": [
     "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
 }

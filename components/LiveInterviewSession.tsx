@@ -1,27 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  ActivityHandling,
-  LiveServerMessage,
-  Modality,
-  ThinkingLevel
-} from '@google/genai';
-import { Settings, SpeakerSegment } from '../types';
-import { NEURO_PHENOM_SYSTEM_INSTRUCTION } from '../constants';
+import { Settings, LanguagePreference, VoiceGender, SpeakerSegment } from '../types';
 import Button from './Button';
-import { AudioLines, Globe } from 'lucide-react';
-import {
-  createAudioContext,
-  getMicrophoneStream,
-  InputLevelMonitor,
-  pickRecorderMimeType
-} from '../services/audioCapture';
-import { startPcmCapture, PcmCaptureHandle } from '../services/pcmCaptureWorklet';
-import {
-  LIVE_NATIVE_AUDIO_MODEL,
-  buildLiveSpeechConfig,
-  buildLiveTranscriptionConfig
-} from '../services/speechConfig';
-import { createGeminiClient, isShowcaseMode, resolveClientApiKey } from '../services/geminiClient';
+import { PhoneOff, Terminal, Bot, AudioLines, Activity, Globe, Volume2, Sparkles, AlertCircle } from 'lucide-react';
 
 interface LiveInterviewSessionProps {
   settings: Settings;
@@ -29,93 +9,32 @@ interface LiveInterviewSessionProps {
   onCancel: () => void;
 }
 
-const classifyCloseReason = (
-  detail: string
-): { key?: 'fail'; network?: 'fail'; message: string; userAction?: string } => {
-  const lowered = detail.toLowerCase();
-  if (
-    lowered.includes('referer') ||
-    lowered.includes('referrer') ||
-    lowered.includes('api_key_http_referrer') ||
-    (lowered.includes('1008') && lowered.includes('blocked'))
-  ) {
-    return {
-      key: 'fail',
-      message:
-        'Gemini API key has HTTP referrer restrictions. Live WebSockets often send an empty Referer, so Google blocks the key.',
-      userAction:
-        'In Google AI Studio → API key → Application restrictions, set to None (or create an unrestricted key for this app). Then paste the key in Settings and retry.'
-    };
-  }
-  if (
-    lowered.includes('key') ||
-    lowered.includes('auth') ||
-    lowered.includes('permission') ||
-    lowered.includes('403') ||
-    lowered.includes('unauthorized')
-  ) {
-    return { key: 'fail', message: 'API key invalid, unauthorized, or missing Live model access.' };
-  }
-  if (
-    lowered.includes('not found') ||
-    lowered.includes('not supported') ||
-    lowered.includes('model')
-  ) {
-    return {
-      network: 'fail',
-      message: 'Live model unavailable for this key. Check Gemini API access for Live audio.'
-    };
-  }
-  return { network: 'fail', message: detail || 'Network/session link interrupted.' };
-};
-
-const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
-  settings,
-  onComplete,
-  onCancel
-}) => {
+const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({ settings, onComplete, onCancel }) => {
   const [isActive, setIsActive] = useState(false);
-  const [liveTranscript, setLiveTranscript] = useState<
-    { speaker: 'AI' | 'Interviewee'; text: string; id: string }[]
-  >([]);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState<{ speaker: 'AI' | 'Interviewee'; text: string; id: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [errorAction, setErrorAction] = useState<string | null>(null);
-  const [inputLevel, setInputLevel] = useState(0);
-  const [diagnostics, setDiagnostics] = useState({
-    key: 'unknown',
-    mic: 'unknown',
-    network: 'unknown',
-    session: 'idle',
-    message: 'Ready to connect. Use headphones when possible; Chrome recommended.'
-  });
+  const [audioLevel, setAudioLevel] = useState<number>(0);
 
-  const sessionRef = useRef<any>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const inputAudioContextRef = useRef<AudioContext | null>(null);
-  const pcmCaptureRef = useRef<PcmCaptureHandle | null>(null);
-  const micStreamRef = useRef<MediaStream | null>(null);
+  const outputAudioContextRef = useRef<AudioContext | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recorderMimeRef = useRef<string>('audio/webm');
-  const audioChunksRef = useRef<Blob[]>([]);
-  const levelMonitorRef = useRef<InputLevelMonitor | null>(null);
-  const transcriptHistoryRef = useRef<SpeakerSegment[]>([]);
-  const playbackSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
-  const intentionalCloseRef = useRef(false);
+  const recordedAudioChunksRef = useRef<Blob[]>([]);
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
 
-  const currentTurnRef = useRef<{
-    speaker: 'AI' | 'Interviewee' | null;
-    text: string;
-    id: string | null;
-  }>({
+  const transcriptHistoryRef = useRef<SpeakerSegment[]>([]);
+  const currentTurnRef = useRef<{ speaker: 'AI' | 'Interviewee' | null; text: string; id: string | null }>({
     speaker: null,
     text: '',
-    id: null
+    id: null,
   });
 
   const nextStartTimeRef = useRef<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sessionStartTimeRef = useRef<number>(0);
-  const connectTimeoutRef = useRef<number | null>(null);
+  const animFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -125,12 +44,48 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
 
   useEffect(() => {
     return () => {
-      intentionalCloseRef.current = true;
-      cleanupAudio();
+      cleanupSession();
     };
   }, []);
 
-  const decode = (base64: string) => {
+  const cleanupSession = () => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+    }
+    // Stop all active playing audio nodes
+    activeSourcesRef.current.forEach(source => {
+      try { source.stop(); } catch (e) {}
+    });
+    activeSourcesRef.current = [];
+
+    if (wsRef.current) {
+      try { wsRef.current.close(); } catch (e) {}
+      wsRef.current = null;
+    }
+    if (inputAudioContextRef.current) {
+      try { inputAudioContextRef.current.close(); } catch (e) {}
+      inputAudioContextRef.current = null;
+    }
+    if (outputAudioContextRef.current) {
+      try { outputAudioContextRef.current.close(); } catch (e) {}
+      outputAudioContextRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+  };
+
+  const encode = (bytes: Uint8Array): string => {
+    let binary = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  };
+
+  const decode = (base64: string): Uint8Array => {
     const binaryString = atob(base64);
     const len = binaryString.length;
     const bytes = new Uint8Array(len);
@@ -140,331 +95,189 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
     return bytes;
   };
 
-  const decodeAudioData = async (
-    data: Uint8Array,
-    ctx: AudioContext,
-    sampleRate: number,
-    numChannels: number
-  ): Promise<AudioBuffer> => {
-    const dataInt16 = new Int16Array(data.buffer);
-    const frameCount = dataInt16.length / numChannels;
-    const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-    for (let channel = 0; channel < numChannels; channel++) {
-      const channelData = buffer.getChannelData(channel);
-      for (let i = 0; i < frameCount; i++) {
-        channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-      }
+  // Convert Float32 microphone data to 16-bit PCM (16kHz)
+  const floatTo16BitPCM = (input: Float32Array): string => {
+    const output = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i++) {
+      const s = Math.max(-1, Math.min(1, input[i]));
+      output[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return encode(new Uint8Array(output.buffer));
+  };
+
+  // Decode raw 16-bit PCM little-endian (24kHz) from Gemini Live to AudioBuffer
+  const decode24kHzPCM = (data: Uint8Array, ctx: AudioContext): AudioBuffer => {
+    const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
+    const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
+    const channelData = buffer.getChannelData(0);
+    for (let i = 0; i < dataInt16.length; i++) {
+      channelData[i] = dataInt16[i] / 32768.0;
     }
     return buffer;
   };
 
-  const stopPlayback = () => {
-    for (const source of playbackSourcesRef.current) {
-      try {
-        source.stop();
-      } catch {
-        /* ignore */
-      }
-      try {
-        source.disconnect();
-      } catch {
-        /* ignore */
-      }
-    }
-    playbackSourcesRef.current.clear();
-    const ctx = audioContextRef.current;
-    nextStartTimeRef.current = ctx ? ctx.currentTime : 0;
-  };
-
-  const cleanupAudio = () => {
-    if (connectTimeoutRef.current) {
-      window.clearTimeout(connectTimeoutRef.current);
-      connectTimeoutRef.current = null;
-    }
-    stopPlayback();
-    levelMonitorRef.current?.stop();
-    levelMonitorRef.current = null;
-    pcmCaptureRef.current?.stop();
-    pcmCaptureRef.current = null;
-    try {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-    } catch {
-      /* ignore */
-    }
-    mediaRecorderRef.current = null;
-    micStreamRef.current?.getTracks().forEach((t) => t.stop());
-    micStreamRef.current = null;
-    void inputAudioContextRef.current?.close().catch(() => undefined);
-    inputAudioContextRef.current = null;
-    void audioContextRef.current?.close().catch(() => undefined);
-    audioContextRef.current = null;
-    setInputLevel(0);
-  };
-
-  const failSession = (detail: string) => {
-    setIsActive(false);
-    cleanupAudio();
-    const classified = classifyCloseReason(detail);
-    setError(classified.message);
-    setErrorAction(classified.userAction ?? null);
-    setDiagnostics((prev) => ({
-      ...prev,
-      key: classified.key ?? prev.key,
-      network: classified.network ?? prev.network,
-      session: 'error',
-      message: classified.message
-    }));
-  };
-
-  const startLocalRecording = (stream: MediaStream) => {
-    audioChunksRef.current = [];
-    const mimeType = pickRecorderMimeType();
-    recorderMimeRef.current = mimeType || 'audio/webm';
-    try {
-      const rec = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream);
-      if (rec.mimeType) recorderMimeRef.current = rec.mimeType;
-      rec.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-      rec.start(1000);
-      mediaRecorderRef.current = rec;
-    } catch (err) {
-      console.warn('Local MediaRecorder unavailable for live interview.', err);
-      mediaRecorderRef.current = null;
-    }
-  };
-
-  const stopLocalRecording = (): Promise<Blob | undefined> =>
-    new Promise((resolve) => {
-      const rec = mediaRecorderRef.current;
-      if (!rec || rec.state === 'inactive') {
-        const blob =
-          audioChunksRef.current.length > 0
-            ? new Blob(audioChunksRef.current, {
-                type: recorderMimeRef.current || 'audio/webm'
-              })
-            : undefined;
-        resolve(blob && blob.size > 0 ? blob : undefined);
-        return;
-      }
-      rec.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, {
-          type: recorderMimeRef.current || rec.mimeType || 'audio/webm'
-        });
-        mediaRecorderRef.current = null;
-        resolve(blob.size > 0 ? blob : undefined);
-      };
-      try {
-        rec.stop();
-      } catch {
-        mediaRecorderRef.current = null;
-        resolve(undefined);
-      }
-    });
-
   const startSession = async () => {
+    setError(null);
+    setIsConnecting(true);
+
     try {
-      const clientKey = resolveClientApiKey(settings.apiKey);
-      if (!clientKey) {
-        setError('Missing Gemini API Key');
-        setDiagnostics({
-          key: 'fail',
-          mic: 'unknown',
-          network: 'unknown',
-          session: 'error',
-          message: isShowcaseMode()
-            ? 'Showcase proxy misconfigured (no server GEMINI_API_KEY).'
-            : 'Missing Gemini API key. Add it in settings.'
-        });
-        return;
-      }
-
-      intentionalCloseRef.current = false;
-      cleanupAudio();
-      setError(null);
-      setErrorAction(null);
-      setIsActive(false);
-      setDiagnostics({
-        key: 'ok',
-        mic: 'checking',
-        network: 'checking',
-        session: 'connecting',
-        message: 'API key found. Requesting microphone access...'
-      });
-
-      if (connectTimeoutRef.current) window.clearTimeout(connectTimeoutRef.current);
-      connectTimeoutRef.current = window.setTimeout(() => {
-        failSession('Connection timeout. Check Gemini API key, mic permission, or network.');
-      }, 15000);
-
-      const ai = createGeminiClient(settings.apiKey);
-      const inputAudioContext = createAudioContext(16000);
-      const outputAudioContext = createAudioContext(24000);
-      inputAudioContextRef.current = inputAudioContext;
-      audioContextRef.current = outputAudioContext;
-      sessionStartTimeRef.current = Date.now();
-      nextStartTimeRef.current = 0;
-
-      const stream = await getMicrophoneStream({
-        audioInputDeviceId: settings.audioInputDeviceId,
-        studioMicMode: settings.studioMicMode
-      });
-      micStreamRef.current = stream;
-      startLocalRecording(stream);
-
-      levelMonitorRef.current = new InputLevelMonitor();
-      levelMonitorRef.current.start(stream, setInputLevel);
-
-      setDiagnostics((prev) => ({
-        ...prev,
-        mic: 'ok',
-        message: 'Microphone ready. Opening live model connection...'
-      }));
-      const outputNode = outputAudioContext.createGain();
-      outputNode.gain.value = 0.9;
-      outputNode.connect(outputAudioContext.destination);
-
-      const speechConfig = buildLiveSpeechConfig({
-        voiceName: settings.voiceName,
-        language: settings.language,
-        voiceGender: settings.voiceGender
-      });
-      const transcriptionConfig = buildLiveTranscriptionConfig(settings.language);
-
-      const sessionPromise = ai.live.connect({
-        model: LIVE_NATIVE_AUDIO_MODEL,
-        callbacks: {
-          onopen: () => {
-            if (connectTimeoutRef.current) {
-              window.clearTimeout(connectTimeoutRef.current);
-              connectTimeoutRef.current = null;
-            }
-            setIsActive(true);
-            setDiagnostics({
-              key: 'ok',
-              mic: 'ok',
-              network: 'ok',
-              session: 'live',
-              message: 'Live session connected. Prefer headphones to reduce echo.'
-            });
-            void startPcmCapture(inputAudioContext, stream, (pcmBlob) => {
-              sessionPromise.then((s) => s.sendRealtimeInput({ audio: pcmBlob }));
-            }).then((handle) => {
-              pcmCaptureRef.current = handle;
-            });
-          },
-          onmessage: async (message: LiveServerMessage) => {
-            const content = message.serverContent;
-            if (!content) return;
-
-            if (content.interrupted) {
-              stopPlayback();
-            }
-
-            const parts = content.modelTurn?.parts ?? [];
-            for (const part of parts) {
-              const audioData = part.inlineData?.data;
-              if (!audioData) continue;
-              nextStartTimeRef.current = Math.max(
-                nextStartTimeRef.current,
-                outputAudioContext.currentTime
-              );
-              const audioBuffer = await decodeAudioData(
-                decode(audioData),
-                outputAudioContext,
-                24000,
-                1
-              );
-              const source = outputAudioContext.createBufferSource();
-              source.buffer = audioBuffer;
-              source.connect(outputNode);
-              playbackSourcesRef.current.add(source);
-              source.onended = () => {
-                playbackSourcesRef.current.delete(source);
-              };
-              source.start(nextStartTimeRef.current);
-              nextStartTimeRef.current += audioBuffer.duration;
-            }
-
-            if (content.outputTranscription) {
-              updateIncrementalTranscript('AI', content.outputTranscription.text ?? '');
-            }
-            if (content.inputTranscription) {
-              updateIncrementalTranscript(
-                'Interviewee',
-                content.inputTranscription.text ?? ''
-              );
-            }
-
-            if (content.turnComplete) {
-              finalizeTurn();
-            }
-          },
-          onerror: (e) => {
-            if (intentionalCloseRef.current) return;
-            const detail =
-              typeof (e as { message?: string })?.message === 'string'
-                ? (e as { message: string }).message
-                : 'Unknown transport error';
-            failSession(`Link interrupt: ${detail}`);
-          },
-          onclose: (e) => {
-            setIsActive(false);
-            if (intentionalCloseRef.current) {
-              cleanupAudio();
-              setDiagnostics((prev) =>
-                prev.session === 'error'
-                  ? prev
-                  : { ...prev, session: 'closed', message: 'Session closed.' }
-              );
-              return;
-            }
-            const closeEvent = e as CloseEvent | undefined;
-            const reasonParts = [
-              closeEvent?.code != null ? `code ${closeEvent.code}` : null,
-              closeEvent?.reason ? String(closeEvent.reason) : null
-            ].filter(Boolean);
-            const detail =
-              reasonParts.length > 0
-                ? `Session closed unexpectedly (${reasonParts.join(', ')})`
-                : 'Session closed unexpectedly after connect.';
-            failSession(detail);
-          }
-        },
-        config: {
-          responseModalities: [Modality.AUDIO],
-          outputAudioTranscription: transcriptionConfig,
-          inputAudioTranscription: transcriptionConfig,
-          speechConfig,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
-          realtimeInputConfig: {
-            automaticActivityDetection: {
-              silenceDurationMs: 1800
-            },
-            activityHandling: ActivityHandling.NO_INTERRUPTION
-          },
-          systemInstruction: NEURO_PHENOM_SYSTEM_INSTRUCTION(
-            settings.language,
-            settings.interviewMode,
-            settings.privacyContract,
-            settings.increasedSensitivityMode
-          )
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
         }
       });
-      sessionRef.current = await sessionPromise;
-    } catch (err) {
-      cleanupAudio();
-      setError('Microphone hardware error or blocked permission.');
-      setDiagnostics((prev) => ({
-        ...prev,
-        mic: 'fail',
-        session: 'error',
-        message: 'Microphone access blocked or unavailable. Check Settings → Microphone.'
-      }));
+      mediaStreamRef.current = stream;
+
+      // Start local audio recording to cache interview conversation
+      recordedAudioChunksRef.current = [];
+      try {
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : 'audio/mp4';
+
+        const recorder = new MediaRecorder(stream, { mimeType });
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) recordedAudioChunksRef.current.push(e.data);
+        };
+        recorder.start(1000);
+        mediaRecorderRef.current = recorder;
+      } catch (recErr) {
+        console.warn('Could not initialize local audio recorder on stream:', recErr);
+      }
+
+      // Input Audio Context (16kHz for Gemini Live)
+      const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+      inputAudioContextRef.current = inputCtx;
+
+      // Output Audio Context (24kHz for model audio playback)
+      const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      outputAudioContextRef.current = outputCtx;
+      nextStartTimeRef.current = 0;
+      sessionStartTimeRef.current = Date.now();
+
+      // Audio level analyser for waveform visualizer
+      const analyser = inputCtx.createAnalyser();
+      analyser.fftSize = 64;
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const updateLevel = () => {
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+        const avg = sum / dataArray.length;
+        setAudioLevel(avg);
+        animFrameRef.current = requestAnimationFrame(updateLevel);
+      };
+      updateLevel();
+
+      // Establish WebSocket link to backend server
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/live`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('Live link connected, initializing session params');
+        ws.send(JSON.stringify({
+          type: 'init',
+          language: settings.language,
+          voiceGender: settings.voiceGender,
+          interviewMode: settings.interviewMode,
+          privacyContract: settings.privacyContract,
+        }));
+      };
+
+      ws.onmessage = async (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          if (msg.type === 'ready') {
+            setIsConnecting(false);
+            setIsActive(true);
+
+            // Connect microphone stream through processor
+            const source = inputCtx.createMediaStreamSource(stream);
+            source.connect(analyser);
+
+            const scriptProcessor = inputCtx.createScriptProcessor(4096, 1, 1);
+            scriptProcessor.onaudioprocess = (e) => {
+              if (ws.readyState === WebSocket.OPEN) {
+                const channelData = e.inputBuffer.getChannelData(0);
+                const pcmBase64 = floatTo16BitPCM(channelData);
+                ws.send(JSON.stringify({
+                  type: 'audio',
+                  audio: pcmBase64,
+                }));
+              }
+            };
+            source.connect(scriptProcessor);
+            scriptProcessor.connect(inputCtx.destination);
+          } else if (msg.type === 'audio' && msg.audio && outputAudioContextRef.current) {
+            const outCtx = outputAudioContextRef.current;
+            if (outCtx.state === 'suspended') {
+              await outCtx.resume();
+            }
+
+            const pcmBytes = decode(msg.audio);
+            const audioBuffer = decode24kHzPCM(pcmBytes, outCtx);
+
+            const bufferSource = outCtx.createBufferSource();
+            bufferSource.buffer = audioBuffer;
+            bufferSource.connect(outCtx.destination);
+
+            // Precise scheduling for gapless playback
+            const currentTime = outCtx.currentTime;
+            if (nextStartTimeRef.current < currentTime) {
+              nextStartTimeRef.current = currentTime + 0.02; // Small initial buffer
+            }
+
+            bufferSource.start(nextStartTimeRef.current);
+            nextStartTimeRef.current += audioBuffer.duration;
+
+            activeSourcesRef.current.push(bufferSource);
+            bufferSource.onended = () => {
+              activeSourcesRef.current = activeSourcesRef.current.filter(s => s !== bufferSource);
+            };
+          } else if (msg.type === 'interrupted') {
+            // User began speaking: cut off model audio immediately
+            activeSourcesRef.current.forEach(source => {
+              try { source.stop(); } catch (e) {}
+            });
+            activeSourcesRef.current = [];
+            if (outputAudioContextRef.current) {
+              nextStartTimeRef.current = outputAudioContextRef.current.currentTime;
+            }
+          } else if (msg.type === 'transcription' && msg.text) {
+            updateIncrementalTranscript(msg.speaker || 'AI', msg.text);
+          } else if (msg.type === 'turnComplete') {
+            finalizeTurn();
+          } else if (msg.type === 'error') {
+            setError(msg.error || 'Live communication interrupted');
+          }
+        } catch (e) {
+          console.error('Error handling WebSocket message:', e);
+        }
+      };
+
+      ws.onerror = (e) => {
+        console.error('Live WebSocket error:', e);
+        setError('Synchronous Link Disconnected');
+        setIsConnecting(false);
+      };
+
+      ws.onclose = () => {
+        setIsActive(false);
+        setIsConnecting(false);
+      };
+
+    } catch (err: any) {
+      console.error('Audio initialization error:', err);
+      setError(err?.message || 'Microphone Hardware Error');
+      setIsConnecting(false);
     }
   };
 
@@ -476,8 +289,8 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
       currentTurnRef.current.text += text;
     }
 
-    setLiveTranscript((prev) => {
-      const others = prev.filter((m) => m.id !== currentTurnRef.current.id);
+    setLiveTranscript(prev => {
+      const others = prev.filter(m => m.id !== currentTurnRef.current.id);
       return [...others, { ...currentTurnRef.current } as any];
     });
   };
@@ -487,196 +300,175 @@ const LiveInterviewSession: React.FC<LiveInterviewSessionProps> = ({
     const ts = (Date.now() - sessionStartTimeRef.current) / 1000;
     transcriptHistoryRef.current.push({
       speaker: currentTurnRef.current.speaker === 'AI' ? 'AI' : 'Interviewee',
-      text: currentTurnRef.current.text,
-      startTime: ts
+      text: currentTurnRef.current.text.trim(),
+      startTime: ts,
     });
     currentTurnRef.current = { speaker: null, text: '', id: null };
   };
 
-  const endSession = async () => {
-    intentionalCloseRef.current = true;
+  const endSession = () => {
     finalizeTurn();
-    if (connectTimeoutRef.current) {
-      window.clearTimeout(connectTimeoutRef.current);
-      connectTimeoutRef.current = null;
-    }
-    if (sessionRef.current) {
+
+    // Finalize audio recording if available
+    let audioBlob: Blob | undefined = undefined;
+    if (mediaRecorderRef.current && recordedAudioChunksRef.current.length > 0) {
       try {
-        sessionRef.current.close();
-      } catch {
-        /* ignore */
+        audioBlob = new Blob(recordedAudioChunksRef.current, {
+          type: mediaRecorderRef.current.mimeType || 'audio/webm',
+        });
+      } catch (e) {
+        console.warn('Could not package recorded audio chunks:', e);
       }
-      sessionRef.current = null;
     }
-    const audioBlob = await stopLocalRecording();
-    cleanupAudio();
+
+    cleanupSession();
     onComplete(transcriptHistoryRef.current, audioBlob);
   };
 
   return (
-    <div className="flex flex-col h-full bg-white text-black border-t border-black">
-      <div className="px-8 py-4 border-b border-black flex justify-between items-center bg-white z-10">
+    <div className="flex flex-col h-full bg-white text-black border-t-2 border-black">
+      {/* Session Top Status Bar */}
+      <div className="px-8 py-4 border-b-2 border-black flex justify-between items-center bg-white z-10">
         <div className="flex items-center gap-6">
           <h2 className="text-[10px] font-black uppercase tracking-[0.4em] flex items-center gap-3">
-            <div
-              className={`w-2.5 h-2.5 rounded-full ${isActive ? 'bg-black animate-pulse shadow-[0_0_8px_rgba(0,0,0,0.3)]' : 'bg-neutral-200'}`}
-            />
-            Synchronous Interface
+            <div className={`w-3 h-3 rounded-full transition-all ${
+              isActive 
+                ? 'bg-black animate-pulse shadow-[0_0_10px_rgba(0,0,0,0.5)]' 
+                : isConnecting 
+                ? 'bg-amber-500 animate-bounce' 
+                : 'bg-neutral-300'
+            }`} />
+            Live Voice Protocol
           </h2>
           {isActive && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-neutral-100 border border-black/5 rounded-full">
-              <Globe size={10} className="text-black opacity-50" />
-              <span className="text-[9px] font-mono font-bold tracking-tighter">
-                LATENCY_STABLE
-              </span>
+            <div className="flex items-center gap-3 px-4 py-1.5 bg-neutral-100 border border-black/10 rounded-full">
+              <Activity size={12} className="text-black animate-pulse" />
+              <span className="text-[9px] font-mono font-bold tracking-tight">GEMINI_3.8_LIVE • 24k_SYNC</span>
             </div>
           )}
+          <span className="text-[9px] font-black uppercase tracking-widest text-neutral-400">
+            {settings.language} • {settings.voiceGender} • {settings.interviewMode}
+          </span>
         </div>
-        <div className="flex gap-4">
+
+        <div className="flex gap-4 items-center">
           <Button variant="outline" size="sm" onClick={onCancel}>
-            Terminate
+            Exit
           </Button>
           {isActive && (
-            <Button size="sm" onClick={() => void endSession()}>
-              Finalize & Map
+            <Button size="sm" onClick={endSession} className="bg-black text-white hover:bg-neutral-800">
+              Finalize & Synthesize
             </Button>
           )}
         </div>
       </div>
 
       <div className="flex-1 flex flex-col relative overflow-hidden bg-[#fafafa]">
-        <div className="mx-8 mt-6 rounded-xl border border-black/10 bg-white px-4 py-3">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] font-bold uppercase tracking-wider">
-            <span>
-              Key: <strong>{String(diagnostics.key)}</strong>
-            </span>
-            <span>
-              Mic: <strong>{String(diagnostics.mic)}</strong>
-            </span>
-            <span>
-              Network: <strong>{String(diagnostics.network)}</strong>
-            </span>
-            <span>
-              Session: <strong>{String(diagnostics.session)}</strong>
-            </span>
-          </div>
-          <p className="mt-2 text-[11px] text-neutral-600">{diagnostics.message}</p>
-          {(isActive || diagnostics.mic === 'ok') && (
-            <div className="mt-3 flex items-center gap-3">
-              <span className="text-[9px] font-black uppercase tracking-widest text-neutral-400">
-                Input
-              </span>
-              <div className="flex-1 h-2 bg-neutral-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-black transition-[width] duration-75"
-                  style={{ width: `${Math.round(inputLevel * 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Unconnected Welcome State */}
         {!isActive && !error && (
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center animate-in fade-in duration-700">
-            <div className="relative mb-16">
-              <AudioLines size={80} className="opacity-10" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-12 h-12 border border-black/5 rounded-full animate-ping" />
+            <div className="relative mb-12">
+              <div className="w-24 h-24 border-2 border-black flex items-center justify-center rounded-3xl bg-white shadow-xl">
+                <AudioLines size={48} className="text-black" />
               </div>
             </div>
-            <h3 className="text-4xl font-black uppercase tracking-tighter mb-6 leading-tight">
-              Neural Link Initialize
+            <h3 className="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-4 leading-tight">
+              Micro-Phenomenology Elicitation
             </h3>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 max-w-sm mb-4 leading-loose">
-              Establish interactive neurophenomenology session. Real-time synchronicity and
-              structural analysis enabled.
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-neutral-500 max-w-md mb-10 leading-relaxed">
+              Bi-directional voice conversation with low-latency conversational audio. 
+              The interviewer will guide you to explore the sensory micro-dynamics of a singular moment.
             </p>
-            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-neutral-400 max-w-md mb-12 leading-relaxed">
-              Chrome recommended. Select your USB mic in Settings. Prefer wired headphones so AI
-              speech does not re-enter the microphone.
-            </p>
-            <Button size="lg" onClick={() => void startSession()} className="px-12">
-              Connect Link
+            <Button 
+              size="lg" 
+              onClick={startSession} 
+              loading={isConnecting}
+              className="px-12 py-5 rounded-full text-xs font-black shadow-2xl hover:scale-105 active:scale-95 transition-all"
+            >
+              {isConnecting ? "Establishing Live Neural Link..." : "Initialize Conversational Session"}
             </Button>
           </div>
         )}
 
+        {/* Active Conversation Live Transcript */}
         {isActive && (
-          <div className="flex-1 flex flex-col p-8 md:p-16 lg:p-24 overflow-hidden">
-            <div
-              ref={scrollRef}
-              className="flex-1 overflow-y-auto space-y-16 pr-4 scroll-smooth no-scrollbar"
-            >
-              {liveTranscript.map((msg, idx) => (
-                <div
-                  key={msg.id}
-                  className={`flex flex-col max-w-2xl animate-in slide-in-from-bottom-2 duration-300 ${msg.speaker === 'AI' ? 'mr-auto' : 'ml-auto items-end'}`}
-                >
-                  <div className="flex items-center gap-3 mb-3 opacity-30">
-                    <span className="text-[9px] font-black uppercase tracking-widest">
-                      {msg.speaker}
-                    </span>
-                    <div className="w-8 h-px bg-black" />
-                  </div>
-                  <div
-                    className={`p-8 border-2 ${msg.speaker === 'AI' ? 'bg-white border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,0.05)]' : 'bg-black text-white border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]'}`}
-                  >
-                    <p className="text-2xl font-bold leading-tight uppercase tracking-tight font-mono">
-                      {msg.text}
-                      {idx === liveTranscript.length - 1 && (
-                        <span className="inline-block w-2 h-6 bg-current ml-1 animate-pulse" />
-                      )}
-                    </p>
-                  </div>
+          <div className="flex-1 flex flex-col p-6 md:p-12 lg:p-16 overflow-hidden">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-10 pr-4 scroll-smooth no-scrollbar">
+              {liveTranscript.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
+                  <Sparkles size={32} className="mb-4 animate-spin" />
+                  <p className="text-xs font-black uppercase tracking-[0.4em]">
+                    Awaiting opening clinical question...
+                  </p>
+                  <p className="text-[10px] font-mono mt-2">Speak into microphone to respond naturally</p>
                 </div>
-              ))}
+              ) : (
+                liveTranscript.map((msg, idx) => (
+                  <div 
+                    key={msg.id} 
+                    className={`flex flex-col max-w-2xl animate-in slide-in-from-bottom-2 duration-300 ${
+                      msg.speaker === 'AI' ? 'mr-auto' : 'ml-auto items-end'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 mb-2 opacity-40">
+                      <span className="text-[9px] font-black uppercase tracking-widest">{msg.speaker}</span>
+                      <div className="w-6 h-px bg-black" />
+                    </div>
+                    <div className={`p-6 md:p-8 border-2 rounded-2xl ${
+                      msg.speaker === 'AI' 
+                        ? 'bg-white border-black text-black shadow-[6px_6px_0px_0px_rgba(0,0,0,0.06)]' 
+                        : 'bg-black text-white border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,0.12)]'
+                    }`}>
+                      <p className="text-xl md:text-2xl font-bold leading-snug tracking-tight font-mono">
+                        {msg.text}
+                        {idx === liveTranscript.length - 1 && (
+                          <span className="inline-block w-2.5 h-5 bg-current ml-1.5 animate-pulse" />
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
 
-            <div className="mt-16 flex items-end justify-center gap-1.5 h-12 px-12">
-              {[...Array(40)].map((_, i) => (
-                <div
-                  key={i}
-                  className="w-1.5 bg-black transition-all duration-75"
-                  style={{
-                    height: `${Math.max(8, inputLevel * 100 * (0.4 + ((i * 17) % 60) / 100))}%`,
-                    opacity: 0.08 + inputLevel * 0.35
-                  }}
-                />
-              ))}
+            {/* Dynamic Waveform Visualizer */}
+            <div className="mt-8 pt-4 border-t border-black/10 flex items-center justify-between px-6 bg-white rounded-2xl py-3 border border-black shadow-sm">
+              <div className="flex items-center gap-3">
+                <Volume2 size={16} className="text-black" />
+                <span className="text-[9px] font-black uppercase tracking-widest text-neutral-400">Live Audio Stream</span>
+              </div>
+              <div className="flex items-end gap-1 h-6">
+                {[...Array(32)].map((_, i) => {
+                  const normalized = Math.min(100, Math.max(15, (audioLevel * (1 + (i % 5) * 0.2))));
+                  return (
+                    <div 
+                      key={i} 
+                      className="w-1 bg-black rounded-full transition-all duration-75"
+                      style={{ 
+                        height: `${normalized}%`,
+                        opacity: 0.2 + (audioLevel / 255) * 0.8
+                      }} 
+                    />
+                  );
+                })}
+              </div>
+              <div className="text-[9px] font-mono font-black uppercase tracking-widest opacity-60">
+                Audio Buffered In Local Storage
+              </div>
             </div>
           </div>
         )}
 
+        {/* Error Modal */}
         {error && (
           <div className="flex-1 flex items-center justify-center p-8">
-            <div className="text-center p-12 md:p-16 border-2 border-black bg-white shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] max-w-xl">
-              <p className="text-[12px] font-black uppercase tracking-widest mb-4 text-red-600">
-                LINK_FAILURE
-              </p>
-              <p className="text-sm font-medium text-neutral-800 mb-4 leading-relaxed">{error}</p>
-              {errorAction && (
-                <p className="text-[11px] text-neutral-500 mb-8 leading-relaxed">{errorAction}</p>
-              )}
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Button
-                  size="md"
-                  onClick={() => {
-                    setError(null);
-                    setErrorAction(null);
-                    setDiagnostics({
-                      key: 'unknown',
-                      mic: 'unknown',
-                      network: 'unknown',
-                      session: 'idle',
-                      message:
-                        'Ready to connect. Use headphones when possible; Chrome recommended.'
-                    });
-                  }}
-                >
-                  Try Again
-                </Button>
-                <Button size="md" variant="outline" onClick={() => window.location.reload()}>
-                  Reset Protocol
-                </Button>
+            <div className="text-center p-12 border-2 border-black bg-white shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] max-w-md rounded-2xl">
+              <AlertCircle size={40} className="mx-auto mb-4 text-red-600" />
+              <p className="text-xs font-black uppercase tracking-widest mb-2 text-red-600">Protocol Disconnect</p>
+              <p className="text-sm font-medium text-neutral-600 mb-8">{error}</p>
+              <div className="flex gap-4 justify-center">
+                <Button size="sm" variant="outline" onClick={onCancel}>Cancel</Button>
+                <Button size="sm" onClick={startSession}>Reconnect</Button>
               </div>
             </div>
           </div>

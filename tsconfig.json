@@ -17,5 +17,5 @@
     "jsx": "react-jsx"
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", "dist", "graphify-out"]
+  "exclude": ["node_modules", "dist"]
 }

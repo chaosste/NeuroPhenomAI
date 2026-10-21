@@ -11,25 +11,31 @@ import {
   Search, 
   Upload, 
   Mic, 
-  Trash2,
-  ChevronRight,
-  ArrowRight,
-  MessageSquare,
-  FileText,
-  Coffee
+  Trash2, 
+  ChevronRight, 
+  ArrowRight, 
+  MessageSquare, 
+  FileText, 
+  Coffee,
+  HardDrive,
+  Download,
+  Sparkles,
+  AlertCircle,
+  Play
 } from 'lucide-react';
 import LiveInterviewSession from './components/LiveInterviewSession';
 import AnalysisView from './components/AnalysisView';
 import SettingsMenu from './components/SettingsMenu';
 import StandaloneRecorder from './components/StandaloneRecorder';
-import AppFallback from './components/AppFallback';
 import Button from './components/Button';
-import { analyzeInterview, transcribeInterviewAudio } from './services/geminiService';
-import {
-  cacheInterviewRecording,
-  deleteCachedInterviewRecording,
-  getCachedInterviewRecording
-} from './services/localAudioPersistence';
+import { analyzeInterview, transcribeAudio } from './services/geminiService';
+import { 
+  saveAudioToCache, 
+  deleteAudioFromCache, 
+  getStorageUsage, 
+  formatBytes,
+  exportCachedAudio
+} from './services/audioCacheService';
 import { Artifact } from './constants';
 
 const App: React.FC = () => {
@@ -39,232 +45,60 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'AI_INTERVIEW' | 'RECORDED' | 'UPLOADED'>('ALL');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
-  const [offlineAcknowledged, setOfflineAcknowledged] = useState(false);
-  const [appNotice, setAppNotice] = useState<{ type: 'analysis-error'; message: string } | null>(null);
+  const [analysisStatusMessage, setAnalysisStatusMessage] = useState('Mapping Subjective Space');
+  const [storageStats, setStorageStats] = useState<{ count: number; totalBytes: number; formattedSize: string }>({
+    count: 0,
+    totalBytes: 0,
+    formattedSize: '0 B',
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [settings, setSettings] = useState<Settings>({
     language: LanguagePreference.UK,
     voiceGender: VoiceGender.FEMALE,
-    voiceName: 'Zephyr',
     privacyContract: true,
-    increasedSensitivityMode: false,
     interviewMode: InterviewMode.BEGINNER,
-    persistLocalData: false,
-    studioMicMode: false
   });
 
-  const encodeBase64 = (bytes: Uint8Array) => {
-    let binary = '';
-    for (let i = 0; i < bytes.byteLength; i += 1) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binary);
-  };
-
-  const decodeBase64 = (value: string) => {
-    const binary = atob(value);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes;
-  };
-
-  const deriveArchiveKey = async (passphrase: string, salt: Uint8Array, iterations: number) => {
-    const encoder = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(passphrase),
-      'PBKDF2',
-      false,
-      ['deriveKey']
-    );
-
-    return crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt: salt as unknown as BufferSource,
-        iterations,
-        hash: 'SHA-256'
-      },
-      keyMaterial,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['encrypt', 'decrypt']
-    );
-  };
-
-  const encryptArchive = async (payload: object, passphrase: string) => {
-    const iterations = 250000;
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const key = await deriveArchiveKey(passphrase, salt, iterations);
-    const plaintext = new TextEncoder().encode(JSON.stringify(payload));
-    const ciphertext = new Uint8Array(
-      await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv: iv as unknown as BufferSource },
-        key,
-        plaintext
-      )
-    );
-
-    return JSON.stringify({
-      v: 1,
-      alg: 'AES-GCM',
-      kdf: 'PBKDF2-SHA256',
-      iter: iterations,
-      salt: encodeBase64(salt),
-      iv: encodeBase64(iv),
-      data: encodeBase64(ciphertext)
-    });
-  };
-
-  const decryptArchive = async (payloadText: string, passphrase: string) => {
-    const parsed = JSON.parse(payloadText);
-    if (
-      typeof parsed !== 'object' ||
-      parsed === null ||
-      parsed.v !== 1 ||
-      typeof parsed.iter !== 'number' ||
-      typeof parsed.salt !== 'string' ||
-      typeof parsed.iv !== 'string' ||
-      typeof parsed.data !== 'string'
-    ) {
-      throw new Error('Invalid archive format.');
-    }
-
-    const salt = decodeBase64(parsed.salt);
-    const iv = decodeBase64(parsed.iv);
-    const ciphertext = decodeBase64(parsed.data);
-    const key = await deriveArchiveKey(passphrase, salt, parsed.iter);
-    const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv as unknown as BufferSource },
-      key,
-      ciphertext as unknown as BufferSource
-    );
-
-    return JSON.parse(new TextDecoder().decode(plaintext));
-  };
-
   useEffect(() => {
+    const savedSessions = localStorage.getItem('neuro_phenom_sessions');
+    if (savedSessions) {
+      try {
+        const parsed: InterviewSession[] = JSON.parse(savedSessions);
+        // Clean out any stale object URLs from localStorage
+        const sanitized = parsed.map(s => ({
+          ...s,
+          audioUrl: undefined, // Will be rehydrated from IndexedDB on demand
+        }));
+        setSessions(sanitized);
+      } catch (e) {
+        console.warn('Could not parse saved sessions:', e);
+      }
+    }
     const savedSettings = localStorage.getItem('neuro_phenom_settings');
     if (savedSettings) {
-      try {
-        const parsed = JSON.parse(savedSettings);
-        setSettings(prev => ({ ...prev, ...parsed }));
-        if (parsed?.persistLocalData) {
-          const savedSessions = localStorage.getItem('neuro_phenom_sessions');
-          if (savedSessions) {
-            try {
-              const parsedSessions = JSON.parse(savedSessions) as InterviewSession[];
-              void (async () => {
-                const hydrated = await Promise.all(
-                  parsedSessions.map(async (s) => {
-                    if (s.audioUrl && !s.audioUrl.startsWith('blob:')) return s;
-                    const blob = await getCachedInterviewRecording(s.id);
-                    if (!blob) return { ...s, audioUrl: undefined };
-                    return { ...s, audioUrl: URL.createObjectURL(blob) };
-                  })
-                );
-                setSessions(hydrated);
-              })();
-            } catch {}
-          }
-        }
-      } catch {}
+      try { setSettings(JSON.parse(savedSettings)); } catch (e) {}
     }
-    const sessionApiKey = sessionStorage.getItem('neuro_phenom_api_key');
-    if (sessionApiKey) {
-      setSettings(prev => ({ ...prev, apiKey: sessionApiKey }));
-    }
+
+    refreshStorageUsage();
   }, []);
 
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      setOfflineAcknowledged(false);
-    };
-    const handleOffline = () => {
-      setIsOnline(false);
-      setOfflineAcknowledged(false);
-    };
+    // Exclude volatile blob URLs from localStorage serialization
+    const storableSessions = sessions.map(({ audioUrl, ...rest }) => rest);
+    localStorage.setItem('neuro_phenom_sessions', JSON.stringify(storableSessions));
+    refreshStorageUsage();
+  }, [sessions]);
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (settings.persistLocalData) {
-      // Never persist ephemeral blob: URLs — audio is rehydrated from IndexedDB.
-      const serializable = sessions.map(({ audioUrl: _audioUrl, ...rest }) => rest);
-      localStorage.setItem('neuro_phenom_sessions', JSON.stringify(serializable));
-      return;
-    }
-    localStorage.removeItem('neuro_phenom_sessions');
-  }, [sessions, settings.persistLocalData]);
-
-  useEffect(() => {
-    const { apiKey: _omitApiKey, ...safeSettings } = settings;
-    localStorage.setItem('neuro_phenom_settings', JSON.stringify(safeSettings));
+  useEffect(() => { 
+    localStorage.setItem('neuro_phenom_settings', JSON.stringify(settings)); 
   }, [settings]);
 
-  useEffect(() => {
-    if (settings.apiKey && settings.apiKey.trim().length > 0) {
-      sessionStorage.setItem('neuro_phenom_api_key', settings.apiKey);
-      return;
-    }
-    sessionStorage.removeItem('neuro_phenom_api_key');
-  }, [settings.apiKey]);
-
-  const handleExportEncryptedArchive = async () => {
-    if (sessions.length === 0) {
-      alert('No sessions available to export.');
-      return;
-    }
-    const passphrase = window.prompt('Set archive passphrase (required to decrypt):');
-    if (!passphrase) return;
-
+  const refreshStorageUsage = async () => {
     try {
-      const payload = {
-        exportedAt: new Date().toISOString(),
-        sessions
-      };
-      const encrypted = await encryptArchive(payload, passphrase);
-      const blob = new Blob([encrypted], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `neurophenom-archive-${new Date().toISOString().slice(0, 10)}.npvault.json`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      alert('Archive export failed.');
-    }
-  };
-
-  const handleImportEncryptedArchive = async (file: File) => {
-    const passphrase = window.prompt('Enter archive passphrase to import:');
-    if (!passphrase) return;
-
-    try {
-      const payloadText = await file.text();
-      const decrypted = await decryptArchive(payloadText, passphrase);
-      if (!Array.isArray(decrypted?.sessions)) {
-        throw new Error('Invalid archive payload.');
-      }
-      setSessions(decrypted.sessions);
-      setView('home');
-      setActiveSession(null);
-      alert(`Imported ${decrypted.sessions.length} session(s).`);
-    } catch {
-      alert('Archive import failed. Check passphrase and file integrity.');
-    }
+      const stats = await getStorageUsage();
+      setStorageStats(stats);
+    } catch (e) {}
   };
 
   const handleCreateAISession = () => setView('ai-interview');
@@ -272,230 +106,229 @@ const App: React.FC = () => {
   const handleTriggerUpload = () => fileInputRef.current?.click();
 
   const processTranscriptionResult = async (
-    transcriptText: string,
-    type: 'AI_INTERVIEW' | 'RECORDED' | 'UPLOADED',
-    audioUrl?: string,
-    sessionId?: string
+    transcriptText: string, 
+    type: 'AI_INTERVIEW' | 'RECORDED' | 'UPLOADED', 
+    audioBlob?: Blob
   ) => {
     setIsAnalyzing(true);
+    setAnalysisStatusMessage('Executing Neurophenomenological Synthesis...');
+    const sessionId = crypto.randomUUID();
+
     try {
+      // Step 1: Cache audio in IndexedDB if available
+      let hasCachedAudio = false;
+      let audioSize = 0;
+      let audioMimeType = '';
+
+      if (audioBlob) {
+        setAnalysisStatusMessage('Persisting Audio in Local IndexedDB Vault...');
+        const cached = await saveAudioToCache(sessionId, audioBlob, 0, { transcript: transcriptText });
+        hasCachedAudio = true;
+        audioSize = cached.size;
+        audioMimeType = cached.mimeType;
+      }
+
+      // Step 2: Thematic analysis using gemini-3.8-flash
+      setAnalysisStatusMessage('Synthesizing Diachronic & Synchronic Dynamics...');
       const analysis = await analyzeInterview(transcriptText, settings.language);
+
       const newSession: InterviewSession = {
-        id: sessionId ?? crypto.randomUUID(),
+        id: sessionId,
         date: new Date().toISOString(),
-        duration: 0, 
+        duration: analysis.transcript?.reduce((max, t) => Math.max(max, t.startTime || 0), 0) || 0,
         type,
         analysis,
         codes: [],
         annotations: [],
-        audioUrl
+        hasCachedAudio,
+        audioSize,
+        audioMimeType,
       };
+
       setSessions(prev => [newSession, ...prev]);
       setActiveSession(newSession);
       setView('analysis');
-    } catch (error) {
-      setAppNotice({
-        type: 'analysis-error',
-        message: 'Analysis failed to load. Check your network connection and try again.'
-      });
-      alert("MAPPING_PROTOCOL_FAILURE: Please check network status.");
+      await refreshStorageUsage();
+    } catch (error: any) {
+      console.error('Mapping error:', error);
+      alert("MAPPING_PROTOCOL_FAILURE: " + (error?.message || "Please check server link."));
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const text = e.target?.result as string;
-      if (text) await processTranscriptionResult(text, 'UPLOADED');
-    };
-    reader.readAsText(file);
+
+    const isAudio = file.type.startsWith('audio/') || /\.(mp3|wav|m4a|webm|ogg)$/i.test(file.name);
+
+    if (isAudio) {
+      setIsAnalyzing(true);
+      setAnalysisStatusMessage('Transcribing Uploaded Audio Recording...');
+      try {
+        const transcript = await transcribeAudio(file, settings.language);
+        await processTranscriptionResult(transcript, 'UPLOADED', file);
+      } catch (err: any) {
+        alert('Failed to transcribe uploaded audio: ' + (err.message || 'Unknown error'));
+        setIsAnalyzing(false);
+      }
+    } else {
+      // Text file import
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const text = e.target?.result as string;
+        if (text) {
+          await processTranscriptionResult(text, 'UPLOADED');
+        }
+      };
+      reader.readAsText(file);
+    }
+
     event.target.value = '';
   };
 
-  const handleAIInterviewComplete = async (
-    transcript: SpeakerSegment[],
-    audioBlob?: Blob
-  ) => {
-    if (transcript.length === 0 && !audioBlob) {
-      setView('home');
-      return;
+  const handleAIInterviewComplete = async (transcript: SpeakerSegment[], audioBlob?: Blob) => {
+    if (transcript.length === 0) { 
+      setView('home'); 
+      return; 
     }
-
-    let transcriptText = transcript
-      .map((t) => `${t.speaker}: ${t.text}`)
-      .join('\n')
-      .trim();
-
-    const sessionId = crypto.randomUUID();
-    let audioUrl: string | undefined;
-    if (audioBlob && audioBlob.size > 0) {
-      // Keep audio in-app for analysis/playback; never force a Save dialog here.
-      audioUrl = URL.createObjectURL(audioBlob);
-      try {
-        await cacheInterviewRecording(sessionId, audioBlob);
-      } catch (e) {
-        console.warn('In-app recording cache skipped or failed.', e);
-      }
-
-      if (!transcriptText) {
-        try {
-          transcriptText = (await transcribeInterviewAudio(audioBlob)).trim();
-        } catch (e) {
-          console.error(e);
-          alert(
-            'Live transcription was empty and offline re-transcription failed. Check your API key and network.'
-          );
-          setView('home');
-          return;
-        }
-      }
-    }
-
-    if (!transcriptText) {
-      alert('No speech was detected in this session.');
-      setView('home');
-      return;
-    }
-
-    await processTranscriptionResult(transcriptText, 'AI_INTERVIEW', audioUrl, sessionId);
+    const transcriptText = transcript.map(t => `${t.speaker}: ${t.text}`).join('\n');
+    await processTranscriptionResult(transcriptText, 'AI_INTERVIEW', audioBlob);
   };
 
   const handleRecordComplete = async (transcriptText: string, audioBlob: Blob) => {
-    const sessionId = crypto.randomUUID();
-    const audioUrl = URL.createObjectURL(audioBlob);
-    try {
-      await cacheInterviewRecording(sessionId, audioBlob);
-    } catch (e) {
-      console.warn('In-app recording cache skipped or failed.', e);
-    }
-
-    let text = transcriptText.trim();
-    if (!text) {
-      try {
-        text = (await transcribeInterviewAudio(audioBlob)).trim();
-      } catch (e) {
-        console.error(e);
-        alert(
-          'Live transcription was empty and the backup audio transcript failed. Check your API key and network, then retry.'
-        );
-        setView('home');
-        return;
-      }
-    }
-    if (!text) {
-      alert('No speech was detected in this capture. Try again with clearer audio.');
-      setView('home');
-      return;
-    }
-
-    await processTranscriptionResult(text, 'RECORDED', audioUrl, sessionId);
+    await processTranscriptionResult(transcriptText, 'RECORDED', audioBlob);
   };
 
-  const deleteSession = (id: string, e: React.MouseEvent) => {
+  const deleteSession = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("DELETE REPOSITORY? This action cannot be undone.")) {
-      void deleteCachedInterviewRecording(id);
+    if (confirm("DELETE REPOSITORY? This will remove the transcript and delete its locally cached audio.")) {
+      try {
+        await deleteAudioFromCache(id);
+      } catch (e) {}
       setSessions(prev => prev.filter(s => s.id !== id));
-      if (activeSession?.id === id) { setView('home'); setActiveSession(null); }
+      if (activeSession?.id === id) { 
+        setView('home'); 
+        setActiveSession(null); 
+      }
+      await refreshStorageUsage();
     }
   };
 
   const filteredSessions = sessions.filter(s => {
-    const matchesSearch = s.analysis?.summary.toLowerCase().includes(searchQuery.toLowerCase()) || s.date.includes(searchQuery);
+    const matchesSearch = s.analysis?.summary?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          s.date.includes(searchQuery) ||
+                          s.type.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesType = typeFilter === 'ALL' || s.type === typeFilter;
     return matchesSearch && matchesType;
   });
 
   const renderHome = () => (
-    <div className="flex flex-col gap-0 animate-in fade-in duration-500 max-w-7xl mx-auto w-full p-6 md:p-16 lg:p-24">
+    <div className="flex flex-col gap-0 animate-in fade-in duration-500 max-w-7xl mx-auto w-full p-6 md:p-12 lg:p-20">
       <input 
         type="file" 
         ref={fileInputRef} 
         onChange={handleFileUpload} 
-        accept=".txt" 
+        accept=".txt,.json,audio/*,.mp3,.wav,.m4a,.webm" 
         className="hidden" 
       />
       
-      <div className="mb-20">
-        <div className="flex items-center gap-6 mb-8">
+      {/* Hero Header */}
+      <div className="mb-16">
+        <div className="flex items-center gap-6 mb-6">
           <div className="w-16 h-16 bg-black flex items-center justify-center p-3 rounded-2xl shadow-xl">
             <Artifact className="text-white w-full h-full" />
           </div>
           <div>
             <h1 className="text-5xl md:text-7xl font-black tracking-tighter uppercase leading-none">
-              NeuroPhenom
+              NeuroPhenom AI
             </h1>
-            <p className="text-[10px] font-black uppercase tracking-[0.5em] text-neutral-400 mt-2">
-              Micro-Phenomenological Protocol v1.3.3
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-neutral-400 mt-2">
+              Micro-Phenomenological Architecture • v1.4.0
             </p>
           </div>
         </div>
-        <p className="text-xl font-medium max-w-3xl tracking-tight leading-relaxed text-neutral-600">
-          A high-fidelity neurophenomenology interface for researcher and participant alike. 
-          Ease into lived experience through guided evocation, then codify and analyze micro-dynamics with diachronic and synchronic precision.
+        <p className="text-lg md:text-xl font-medium max-w-3xl tracking-tight leading-relaxed text-neutral-600">
+          A high-fidelity clinical interface for mapping pre-reflective subjective experience. 
+          Analyze the micro-dynamics of lived moments through diachronic slicing, synchronic categories, and durable local audio caching.
         </p>
+
+        {/* Local Cache Status Pill */}
+        <div className="mt-6 flex flex-wrap items-center gap-4 text-xs font-mono">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 rounded-full border border-black/10">
+            <HardDrive size={13} className="text-emerald-700" />
+            <span className="font-bold text-neutral-800">Local Vault Storage:</span>
+            <span className="text-neutral-500">{storageStats.count} recordings ({storageStats.formattedSize})</span>
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+            Zero-Cloud Audio Persistence Protocol
+          </span>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+        {/* Left Column: Action Launchers */}
         <div className="lg:col-span-5 flex flex-col gap-6">
-          <div className="bg-black text-white p-10 flex flex-col gap-10 min-h-[340px] rounded-[32px] shadow-2xl relative overflow-hidden group">
+          {/* Live Conversational Voice Launcher */}
+          <div className="bg-black text-white p-8 md:p-10 flex flex-col justify-between min-h-[320px] rounded-[32px] shadow-2xl relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 blur-3xl group-hover:bg-white/10 transition-colors" />
-            <div className="w-14 h-14 border border-white/20 flex items-center justify-center rounded-xl bg-white/5">
-              <MessageSquare size={28} className="text-white" />
+            <div className="w-14 h-14 border border-white/20 flex items-center justify-center rounded-2xl bg-white/10">
+              <MessageSquare size={26} className="text-white" />
             </div>
-            <div className="relative z-10 mt-auto">
-              <h3 className="text-3xl font-black uppercase tracking-tight mb-3">Conduct AI Interview</h3>
-              <p className="text-xs font-bold uppercase tracking-widest opacity-40 mb-8">Guided Elicitation • {settings.language} Protocol</p>
+            <div className="relative z-10 mt-6">
+              <h3 className="text-3xl font-black uppercase tracking-tight mb-2">Conduct AI Interview</h3>
+              <p className="text-xs font-bold uppercase tracking-widest opacity-60 mb-8">
+                Low-Latency Voice Elicitation • {settings.language} • {settings.voiceGender}
+              </p>
               <Button 
                 onClick={handleCreateAISession} 
                 variant="secondary" 
                 size="lg" 
-                className="w-fit rounded-full px-8"
+                className="w-fit rounded-full px-8 hover:scale-105 active:scale-95 transition-transform"
               >
-                Initialize <ChevronRight size={18} className="ml-2" />
+                Launch Voice Session <ChevronRight size={18} className="ml-2" />
               </Button>
             </div>
           </div>
 
+          {/* Secondary Actions */}
           <div className="grid grid-cols-2 gap-4">
             <div 
               onClick={handleStartRecording}
-              className="border-2 border-black p-8 flex flex-col gap-8 group hover:bg-neutral-50 transition-all cursor-pointer rounded-[24px]"
+              className="border-2 border-black p-6 md:p-8 flex flex-col justify-between group hover:bg-neutral-50 transition-all cursor-pointer rounded-[24px]"
             >
               <div className="w-12 h-12 border-2 border-black/10 flex items-center justify-center rounded-xl group-hover:border-black/30 transition-colors">
                 <Mic size={22} className="text-black" />
               </div>
-              <div>
+              <div className="mt-6">
                 <h4 className="text-xs font-black uppercase tracking-widest mb-1">Live Capture</h4>
                 <p className="text-[10px] font-bold uppercase tracking-widest flex items-center text-neutral-400 group-hover:text-black transition-colors">
-                  Record <ChevronRight size={12} className="ml-1" />
+                  Record & Cache <ChevronRight size={12} className="ml-1" />
                 </p>
               </div>
             </div>
 
             <div 
               onClick={handleTriggerUpload}
-              className="border-2 border-black p-8 flex flex-col gap-8 group hover:bg-neutral-50 transition-all cursor-pointer rounded-[24px]"
+              className="border-2 border-black p-6 md:p-8 flex flex-col justify-between group hover:bg-neutral-50 transition-all cursor-pointer rounded-[24px]"
             >
               <div className="w-12 h-12 border-2 border-black/10 flex items-center justify-center rounded-xl group-hover:border-black/30 transition-colors">
                 <FileText size={22} className="text-black" />
               </div>
-              <div>
+              <div className="mt-6">
                 <h4 className="text-xs font-black uppercase tracking-widest mb-1">Batch Import</h4>
                 <p className="text-[10px] font-bold uppercase tracking-widest flex items-center text-neutral-400 group-hover:text-black transition-colors">
-                  Upload .txt <Upload size={12} className="ml-1" />
+                  Audio or Text <Upload size={12} className="ml-1" />
                 </p>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="lg:col-span-7 flex flex-col gap-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b-2 border-black pb-6">
+        {/* Right Column: Repository of Sessions */}
+        <div className="lg:col-span-7 flex flex-col gap-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b-2 border-black pb-4">
             <div className="flex items-center gap-4">
               <h2 className="text-2xl font-black uppercase tracking-tight">Repository</h2>
               <span className="bg-black text-white text-[10px] font-black px-3 py-1 rounded-full">{filteredSessions.length}</span>
@@ -504,7 +337,7 @@ const App: React.FC = () => {
               <Search size={16} className="mr-3 opacity-30" />
               <input 
                 type="text" 
-                placeholder="SEARCH REPOSITORY..." 
+                placeholder="SEARCH ARCHIVE..." 
                 className="bg-transparent outline-none uppercase text-[10px] font-black tracking-widest w-full placeholder:text-neutral-300"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -513,50 +346,62 @@ const App: React.FC = () => {
           </div>
 
           {filteredSessions.length === 0 ? (
-            <div className="py-32 text-center border-2 border-dashed border-black/10 bg-neutral-50/50 rounded-[32px]">
-              <p className="text-xs font-black uppercase tracking-[0.4em] text-neutral-300">Archive Offline</p>
+            <div className="py-24 text-center border-2 border-dashed border-black/10 bg-neutral-50/50 rounded-[32px] p-8">
+              <p className="text-xs font-black uppercase tracking-[0.4em] text-neutral-400 mb-2">No Protocols Archived</p>
+              <p className="text-xs text-neutral-500 mb-6">Initialize an AI voice interview or capture audio to begin mapping.</p>
+              <Button size="sm" onClick={handleCreateAISession}>
+                Start First Protocol
+              </Button>
             </div>
           ) : (
-            <div className="flex flex-col gap-4 overflow-y-auto max-h-[700px] pr-2 no-scrollbar">
+            <div className="flex flex-col gap-4 overflow-y-auto max-h-[640px] pr-2 no-scrollbar">
               {filteredSessions.map(session => (
                 <div 
                   key={session.id}
                   onClick={() => { setActiveSession(session); setView('analysis'); }}
-                  className="group border-2 border-black p-8 hover:bg-black hover:text-white transition-all cursor-pointer rounded-[24px] flex flex-col gap-6 relative"
+                  className="group border-2 border-black p-6 md:p-8 hover:bg-black hover:text-white transition-all cursor-pointer rounded-[24px] flex flex-col gap-4 relative"
                 >
                   <div className="flex justify-between items-start">
-                    <div className="flex items-center gap-4">
-                      <div className="w-8 h-8 rounded-lg border border-current flex items-center justify-center opacity-20">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg border border-current flex items-center justify-center opacity-30">
                         <FileText size={14} />
                       </div>
-                      <span className="text-[10px] font-black uppercase tracking-widest opacity-40 group-hover:opacity-60">
+                      <span className="text-[10px] font-black uppercase tracking-widest opacity-50 group-hover:opacity-75">
                         {new Date(session.date).toLocaleDateString()} • {session.type.replace('_', ' ')}
                       </span>
                     </div>
+
                     <button 
                       onClick={(e) => deleteSession(session.id, e)} 
-                      className="opacity-0 group-hover:opacity-100 p-2 hover:bg-white/10 rounded-lg transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-2 hover:bg-white/20 rounded-lg transition-all"
+                      title="Delete protocol from repository"
                     >
                       <Trash2 size={16} />
                     </button>
                   </div>
                   
-                  <h3 className="text-2xl font-bold uppercase tracking-tight leading-tight line-clamp-2 max-w-[85%]">
-                    {session.analysis?.summary || "Protocol Analysis Pending"}
+                  <h3 className="text-xl md:text-2xl font-bold uppercase tracking-tight leading-snug line-clamp-2 max-w-[85%]">
+                    {session.analysis?.summary || "Protocol Analysis Registered"}
                   </h3>
 
-                  <div className="flex flex-wrap gap-2">
-                    <span className="text-[9px] font-black uppercase border border-current px-3 py-1 rounded-full opacity-40 group-hover:opacity-70">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[9px] font-black uppercase border border-current px-2.5 py-0.5 rounded-full opacity-60">
                       {session.analysis?.phasesCount || 0} Phases
                     </span>
-                    {session.analysis?.modalities.slice(0, 3).map((m, i) => (
-                      <span key={i} className="text-[9px] font-black uppercase border border-current px-3 py-1 rounded-full opacity-40 group-hover:opacity-70">
+                    {session.analysis?.modalities?.slice(0, 3).map((m, i) => (
+                      <span key={i} className="text-[9px] font-black uppercase border border-current px-2.5 py-0.5 rounded-full opacity-60">
                         {m}
                       </span>
                     ))}
+                    {session.hasCachedAudio && (
+                      <span className="text-[9px] font-mono font-bold bg-neutral-200 group-hover:bg-neutral-800 text-neutral-800 group-hover:text-neutral-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <HardDrive size={10} />
+                        CACHED {session.audioSize ? `(${formatBytes(session.audioSize)})` : ''}
+                      </span>
+                    )}
                   </div>
 
-                  <ArrowRight size={20} className="absolute bottom-8 right-8 opacity-0 group-hover:opacity-100 group-hover:translate-x-2 transition-all" />
+                  <ArrowRight size={18} className="absolute bottom-6 right-6 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                 </div>
               ))}
             </div>
@@ -564,46 +409,54 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <footer className="mt-40 p-16 border-t-2 border-black flex flex-col items-center gap-10">
-        <a href="https://newpsychonaut.com" target="_blank" className="text-xs font-black uppercase tracking-[0.8em] hover:opacity-50 transition-opacity">
+      {/* Footer */}
+      <footer className="mt-28 p-12 border-t-2 border-black flex flex-col items-center gap-6">
+        <a 
+          href="https://newpsychonaut.com" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-xs font-black uppercase tracking-[0.6em] hover:opacity-50 transition-opacity"
+        >
           NewPsychonaut.com
         </a>
-        <div className="flex items-center gap-12 opacity-10">
-          <Artifact className="h-10 w-10 text-black" />
-          <div className="w-16 h-[2px] bg-black" />
-          <Artifact className="h-10 w-10 text-black transform rotate-180" />
+        <div className="flex items-center gap-8 opacity-20">
+          <Artifact className="h-8 w-8 text-black" />
+          <div className="w-12 h-[2px] bg-black" />
+          <Artifact className="h-8 w-8 text-black transform rotate-180" />
         </div>
       </footer>
     </div>
   );
 
-  const showOfflineOverlay = !isOnline && !offlineAcknowledged;
-
   return (
     <div className="min-h-screen bg-white text-black flex flex-col font-sans selection:bg-black selection:text-white">
-      <header className="h-24 border-b-2 border-black px-10 flex items-center justify-between sticky top-0 z-50 bg-white/90 backdrop-blur-md">
-        <div className="flex items-center gap-5 cursor-pointer group" onClick={() => setView('home')}>
-          <div className="w-10 h-10 bg-black flex items-center justify-center p-2 rounded-xl group-hover:scale-110 transition-transform shadow-lg">
+      {/* Navigation Header */}
+      <header className="h-20 border-b-2 border-black px-6 md:px-10 flex items-center justify-between sticky top-0 z-50 bg-white/95 backdrop-blur-md">
+        <div className="flex items-center gap-4 cursor-pointer group" onClick={() => setView('home')}>
+          <div className="w-10 h-10 bg-black flex items-center justify-center p-2 rounded-xl group-hover:scale-105 transition-transform shadow-md">
             <Artifact className="w-full h-full text-white" />
           </div>
-          <span className="text-2xl font-black tracking-tighter uppercase group-hover:tracking-normal transition-all">NeuroPhenom AI</span>
+          <div>
+            <span className="text-xl md:text-2xl font-black tracking-tighter uppercase">NeuroPhenom AI</span>
+            <span className="hidden sm:inline-block ml-3 text-[9px] font-mono font-bold text-neutral-400 uppercase tracking-widest">
+              Subjective Mapping
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-6">
-          <SettingsMenu
-            settings={settings}
-            onUpdate={setSettings}
-            onExportEncrypted={handleExportEncryptedArchive}
-            onImportEncrypted={handleImportEncryptedArchive}
-          />
+
+        <div className="flex items-center gap-4">
+          <SettingsMenu settings={settings} onUpdate={setSettings} />
         </div>
       </header>
 
+      {/* Main Container */}
       <main className="flex-1 flex flex-col">
         {isAnalyzing && (
-          <div className="fixed inset-0 bg-white/80 backdrop-blur-xl z-[100] flex items-center justify-center">
-            <div className="text-center">
-              <div className="w-16 h-16 border-4 border-black border-t-transparent animate-spin mx-auto mb-10 rounded-full" />
-              <h3 className="text-[12px] font-black uppercase tracking-[0.6em] animate-pulse">Mapping Subjective Space</h3>
+          <div className="fixed inset-0 bg-white/80 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+            <div className="text-center p-10 bg-white border-2 border-black rounded-3xl shadow-2xl max-w-sm">
+              <div className="w-16 h-16 border-4 border-black border-t-transparent animate-spin mx-auto mb-6 rounded-full" />
+              <h3 className="text-xs font-black uppercase tracking-[0.4em] mb-2">Protocol In Progress</h3>
+              <p className="text-xs font-mono font-bold text-neutral-500 uppercase">{analysisStatusMessage}</p>
             </div>
           </div>
         )}
@@ -611,66 +464,48 @@ const App: React.FC = () => {
         <div className="flex-1">
           {view === 'home' && renderHome()}
           {view === 'recorder' && (
-            <StandaloneRecorder
-              apiKey={settings.apiKey}
-              settings={settings}
-              onComplete={handleRecordComplete}
-              onCancel={() => setView('home')}
+            <StandaloneRecorder 
+              language={settings.language}
+              onComplete={handleRecordComplete} 
+              onCancel={() => setView('home')} 
             />
           )}
           {view === 'ai-interview' && (
-            <div className="p-0 h-[calc(100vh-96px)]">
-              <LiveInterviewSession
-                settings={settings}
+            <div className="p-0 h-[calc(100vh-80px)]">
+              <LiveInterviewSession 
+                settings={settings} 
                 onComplete={handleAIInterviewComplete}
-                onCancel={() => setView('home')}
+                onCancel={() => setView('home')} 
               />
             </div>
           )}
           {view === 'analysis' && activeSession && (
-            <div className="p-0 h-[calc(100vh-96px)] flex flex-col animate-in slide-in-from-bottom-8 duration-700">
-              <AnalysisView
-                session={activeSession}
-                apiKey={settings.apiKey}
-                language={settings.language}
+            <div className="p-0 h-[calc(100vh-80px)] flex flex-col animate-in slide-in-from-bottom-6 duration-500">
+              <AnalysisView 
+                session={activeSession} 
                 onUpdate={(updated) => {
                   setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
                   setActiveSession(updated);
-                }}
+                }} 
               />
             </div>
           )}
         </div>
       </main>
 
+      {/* Floating Coffee Support */}
       {view === 'home' && (
-        <div className="fixed bottom-12 right-12 z-50 flex gap-4">
-          <a href="https://buymeacoffee.com/stevebeale" target="_blank" className="w-16 h-16 bg-black text-white flex items-center justify-center rounded-2xl hover:scale-110 active:scale-95 transition-all shadow-2xl group">
-            <Coffee size={24} className="group-hover:rotate-12 transition-transform" />
+        <div className="fixed bottom-8 right-8 z-50">
+          <a 
+            href="https://buymeacoffee.com/stevebeale" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="w-14 h-14 bg-black text-white flex items-center justify-center rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-xl group"
+            title="Buy me a coffee"
+          >
+            <Coffee size={22} className="group-hover:rotate-12 transition-transform" />
           </a>
         </div>
-      )}
-
-      {showOfflineOverlay && (
-        <AppFallback 
-          variant="offline" 
-          message="Your device appears offline. You can continue in read-only mode or retry the connection." 
-          primaryLabel="Retry Connection" 
-          onPrimaryAction={() => window.location.reload()} 
-          secondaryLabel="Continue Offline" 
-          onSecondaryAction={() => setOfflineAcknowledged(true)} 
-        />
-      )}
-
-      {appNotice && (
-        <AppFallback 
-          variant="analysis-error" 
-          message={appNotice.message} 
-          primaryLabel="Dismiss" 
-          onPrimaryAction={() => setAppNotice(null)} 
-          secondaryLabel="Reload" 
-          onSecondaryAction={() => window.location.reload()} 
-        />
       )}
     </div>
   );

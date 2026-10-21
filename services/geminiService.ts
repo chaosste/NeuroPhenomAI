@@ -1,178 +1,79 @@
-
-import {
-  Type,
-  createPartFromBase64,
-  createPartFromText,
-  createUserContent
-} from "@google/genai";
 import { AnalysisResult, LanguagePreference } from "../types";
-import { OFFLINE_TRANSCRIBE_MODEL } from "./speechConfig";
-import { createGeminiClient, isShowcaseMode, resolveClientApiKey } from "./geminiClient";
-
-const getApiKey = (): string => {
-  if (isShowcaseMode()) return resolveClientApiKey();
-  try {
-    const fromSession = sessionStorage.getItem('neuro_phenom_api_key')?.trim();
-    if (fromSession) return fromSession;
-  } catch {
-    /* private mode */
-  }
-  const savedSettings = localStorage.getItem('neuro_phenom_settings');
-  if (savedSettings) {
-    try {
-      const parsed = JSON.parse(savedSettings);
-      if (typeof parsed?.apiKey === 'string' && parsed.apiKey.trim()) return parsed.apiKey.trim();
-    } catch {
-      /* ignore */
-    }
-  }
-  return '';
-};
-
-const blobToBase64 = (blob: Blob) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result;
-      if (typeof result !== 'string') {
-        reject(new Error('Unexpected FileReader result'));
-        return;
-      }
-      const comma = result.indexOf(',');
-      resolve(comma >= 0 ? result.slice(comma + 1) : result);
-    };
-    reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'));
-    reader.readAsDataURL(blob);
-  });
-
-/** Offline pass: send the captured clip to Gemini as inline audio for a verbatim transcript. */
-export const transcribeInterviewAudio = async (audioBlob: Blob): Promise<string> => {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error("Please add your Gemini API key in Settings");
-  }
-  const mimeType =
-    audioBlob.type && audioBlob.type !== 'application/octet-stream'
-      ? audioBlob.type
-      : 'audio/webm';
-  const ai = createGeminiClient(apiKey);
-  const audioBase64 = await blobToBase64(audioBlob);
-  const response = await ai.models.generateContent({
-    model: OFFLINE_TRANSCRIBE_MODEL,
-    contents: createUserContent([
-      createPartFromText(
-        'Transcribe this clinical neurophenomenology interview audio verbatim. ' +
-          'Preserve filler words and hesitations. Do not summarize, translate, or add commentary. ' +
-          'If multiple speakers are clearly distinct, prefix lines with "Interviewer:" or "Interviewee:". ' +
-          'Output only the transcript.'
-      ),
-      createPartFromBase64(audioBase64, mimeType)
-    ])
-  });
-  return (response.text ?? '').trim();
-};
 
 export const getWelcomeMessage = async (language: LanguagePreference): Promise<string> => {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    return "Please add your Gemini API key in Settings to begin.";
-  }
-  
-  const ai = createGeminiClient(apiKey);
-  const prompt = `Generate a concise, professional clinical introduction for a neurophenomenology interview. 
-  Focus on the 'how' of micro-experience. 
-  Use ${language === LanguagePreference.UK ? 'UK' : 'US'} spelling and a sophisticated tone.`;
-
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: prompt,
+    const res = await fetch('/api/gemini/welcome', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language })
     });
-    return response.text || "Interface established. Shall we begin mapping your micro-experience?";
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const data = await res.json();
+    return data.text || "Interface established. Shall we begin mapping your micro-experience?";
   } catch (error) {
     console.error("Welcome Error:", error);
     return "Clinical observer ready. Please describe a specific, singular experience to begin.";
   }
 };
 
+export const transcribeAudio = async (audioBlob: Blob, language: LanguagePreference = LanguagePreference.UK): Promise<string> => {
+  const reader = new FileReader();
+  const base64Promise = new Promise<string>((resolve, reject) => {
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      resolve(result);
+    };
+    reader.onerror = reject;
+  });
+  reader.readAsDataURL(audioBlob);
+  const audioBase64 = await base64Promise;
+
+  const res = await fetch('/api/gemini/transcribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      audioBase64,
+      mimeType: audioBlob.type || 'audio/webm',
+      language
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Audio transcription failed with status ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.transcript || '';
+};
+
 export const analyzeInterview = async (transcriptText: string, language: LanguagePreference): Promise<AnalysisResult> => {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error("Please add your Gemini API key in Settings");
+  const res = await fetch('/api/gemini/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      transcriptText,
+      language
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Thematic analysis failed with status ${res.status}`);
   }
-  
-  const ai = createGeminiClient(apiKey);
-  
-  const responseSchema = {
-    type: Type.OBJECT,
-    properties: {
-      summary: { type: Type.STRING },
-      takeaways: { type: Type.ARRAY, items: { type: Type.STRING } },
-      modalities: { type: Type.ARRAY, items: { type: Type.STRING } },
-      phasesCount: { type: Type.INTEGER },
-      diachronicStructure: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            phaseName: { type: Type.STRING },
-            description: { type: Type.STRING },
-            startTime: { type: Type.STRING }
-          },
-          required: ["phaseName", "description", "startTime"]
-        }
-      },
-      synchronicStructure: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            category: { type: Type.STRING },
-            details: { type: Type.STRING }
-          },
-          required: ["category", "details"]
-        }
-      },
-      transcript: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            speaker: { type: Type.STRING, enum: ["Interviewer", "Interviewee", "AI"] },
-            text: { type: Type.STRING },
-            startTime: { type: Type.NUMBER }
-          },
-          required: ["speaker", "text"]
-        }
-      }
-    },
-    required: ["summary", "takeaways", "modalities", "phasesCount", "diachronicStructure", "synchronicStructure", "transcript"]
-  };
 
-  const prompt = `MANDATORY INSTRUCTION:
-  Analyze the provided raw data as a neurophenomenology interview.
-  1. DIARIZATION: Extract turns between the 'Interviewer' (AI) and 'Interviewee' (User). 
-  2. PHENOMENOLOGY: Map the diachronic temporal unfolding and synchronic structural features.
-  3. REGISTRY: Identify the specific sensory modalities (visual, auditory, tactile, etc.).
-  
-  DATA FOR ANALYSIS:
-  ${transcriptText}`;
+  const data: AnalysisResult = await res.json();
+  return data;
+};
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema,
-      }
-    });
+export const synthesizeSpeech = async (text: string, voiceName: string = 'Zephyr'): Promise<string> => {
+  const res = await fetch('/api/gemini/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, voiceName })
+  });
 
-    const resultText = response.text;
-    if (!resultText) throw new Error("MAPPING_PROTOCOL_FAILURE_EMPTY");
-    return JSON.parse(resultText.trim()) as AnalysisResult;
-  } catch (error) {
-    console.error("Critical Analysis Error:", error);
-    throw error;
-  }
+  if (!res.ok) throw new Error('Speech synthesis failed');
+  const data = await res.json();
+  return `data:${data.mimeType};base64,${data.audio}`;
 };
