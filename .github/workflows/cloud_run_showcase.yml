@@ -1,9 +1,10 @@
-name: Deploy Cloud Run showcase
+name: Deploy to Google Cloud Run
 
-# Manual by default until GCP Workload Identity Federation secrets are configured.
-# Local/one-shot deploy already works via: gcloud builds submit --config=cloudbuild.yaml
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -12,7 +13,7 @@ permissions:
 env:
   GCP_PROJECT_ID: microphenom-ai
   GCP_REGION: us-west1
-  CLOUD_RUN_SERVICE: neurophenom-ai-showcase
+  CLOUD_RUN_SERVICE: neurophenom-ai
 
 jobs:
   deploy:

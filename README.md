@@ -60,27 +60,27 @@ Featuring a stark black-and-white minimalist design, the interface stays out of 
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 19 + TypeScript, Vite |
-| Client AI | Google Gemini API (BYOK via Settings) |
-| Production server | Express (`server.js`) serving `dist/` |
-| Optional server AI | Azure OpenAI / Foundry (`/api/*` — not used by the UI today) |
-| Deployment | Azure App Service (primary); Cloud Run showcase (Gemini proxy) |
+| Frontend | React 19 + TypeScript, Tailwind CSS, Vite |
+| Full-Stack Server | Node.js 22 + Express (`server.ts`), WebSocket Live Audio |
+| AI Engine | Google Gemini (`gemini-3.8-flash`, `gemini-3.8-live`, `gemini-3.5-transcribe`) |
+| Local Persistence | IndexedDB Audio Vault (`services/audioCacheService.ts`) |
+| Deployment | Google Cloud Run (Containerized via `Dockerfile` and `cloudbuild.yaml`) |
 
 ## 🏗️ Architecture
 
 ```
 index.html → index.tsx → App.tsx
-                           ├─ LiveInterviewSession  ─┐
-                           ├─ AnalysisView          ├─→ services/geminiService (browser Gemini)
-                           └─ StandaloneRecorder    ─┘
+                           ├─ LiveInterviewSession  ─→ WebSocket (/live, gemini-3.8-live)
+                           ├─ StandaloneRecorder    ─→ POST (/api/gemini/transcribe, gemini-3.5-transcribe)
+                           └─ AnalysisView          ─→ POST (/api/gemini/analyze, gemini-3.8-flash)
+                                                    └─ IndexedDB Audio Vault & File System Export
 
-npm start → server.js → static dist/ + /api/health|/api/welcome|/api/analyze (Azure Foundry)
+npm start → tsx server.ts → static dist/ + /api/health + /api/gemini/* + WebSocket /live
 ```
 
-- **Today:** the React app talks to Gemini in the browser with your own API key (privacy-first BYOK).
-- **Server Foundry routes** in `server.js` are ready for a future server-mediated path; the UI does not call them yet.
-- Methodology baseline: [`docs/knowledge/core/NP_CANONICAL_SPEC.md`](docs/knowledge/core/NP_CANONICAL_SPEC.md)
-- Public one-pager: [`docs/github-pages/index.html`](docs/github-pages/index.html)
+- **Full-Stack Security:** Server-side proxy manages all Gemini SDK calls.
+- **Durable Local Storage:** Recordings and sessions are cached locally in the browser's IndexedDB vault.
+- **Cloud Run Deployment:** Designed for serverless deployment on Google Cloud Run with automatic scaling.
 
 ## 🏎️ Quick start
 
@@ -91,18 +91,18 @@ npm install
 npm run dev
 ```
 
-1. Open the app (Vite defaults to `http://localhost:8080`).
-2. Open **Settings** and paste your Google Gemini API key.
-3. Start a live interview or use the standalone recorder.
+1. Open the app (`http://localhost:3000`).
+2. Start a live interview session, capture audio, or import recordings.
+3. Review and download structured diachronic and synchronic analyses.
 
-Production-style local run (build + Express):
+Production run (build + Express):
 
 ```bash
 npm run build
 npm start
 ```
 
-Server env vars (optional Azure Foundry, rate limits) are documented in [`.env.example`](.env.example).
+Environment variables are documented in [`.env.example`](.env.example).
 
 ## 🦞 Workflow Protocol
 

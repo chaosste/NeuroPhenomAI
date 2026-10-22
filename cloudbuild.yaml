@@ -1,9 +1,8 @@
-# Cloud Run showcase deploy (Gemini Live proxy).
-# Primary production remains Azure App Service.
-# Trigger manually or via GitHub Actions workflow_dispatch / push path filter.
+# Google Cloud Run Build & Deployment Configuration
+# Builds container image and deploys to Cloud Run with Gemini AI integration.
 
 substitutions:
-  _SERVICE: neurophenom-ai-showcase
+  _SERVICE: neurophenom-ai
   _REGION: us-west1
   _SECRET: gemini-api-key
 
@@ -11,8 +10,6 @@ steps:
   - name: gcr.io/cloud-builders/docker
     args:
       - build
-      - --build-arg
-      - VITE_SHOWCASE_MODE=true
       - -t
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/${_SERVICE}:$COMMIT_SHA
       - -t
@@ -41,13 +38,13 @@ steps:
       - --min-instances
       - '0'
       - --max-instances
-      - '2'
+      - '4'
       - --memory
       - 512Mi
       - --cpu
       - '1'
       - --set-env-vars
-      - SHOWCASE_MODE=true
+      - NODE_ENV=production
       - --set-secrets
       - GEMINI_API_KEY=${_SECRET}:latest
       - --quiet

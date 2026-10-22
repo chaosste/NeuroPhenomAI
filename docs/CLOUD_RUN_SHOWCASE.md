@@ -1,77 +1,79 @@
-# Cloud Run Showcase Deploy (in-repo path)
+# Google Cloud Run Deployment Guide
 
-> **2026-07-10:** For demos that must match the working AI Studio applet, use the sibling repo  
-> [`NeuroPhenomAI-Showcase`](https://github.com/chaosste/NeuroPhenomAI-Showcase)  
-> (`/Users/stephenbeale/Projects/NeuroPhenomAI-Showcase`).  
-> Full context: [HANDOFF_2026-07-10.md](HANDOFF_2026-07-10.md).
->
-> This document describes the **in-repo** Cloud Run adaptation of the main Azure app. It remains useful as reference, but it did not fully reproduce the gold AI Studio UX.
+Primary production deployment guide for NeuroPhenom AI on Google Cloud Run with server-side Gemini AI integration (`gemini-3.8-flash`, `gemini-3.8-live`, and `gemini-3.5-transcribe`).
 
-Demo / showcase path for NeuroPhenomAI on Google Cloud Run with a **server-side Gemini Live proxy** (same pattern as the working AI Studio applet).
+## Overview
 
-Production public traffic stays on **Azure App Service**.
+The containerized deployment on Google Cloud Run provides:
 
-## Why this exists
+1. **Secure API Key Management:** `GEMINI_API_KEY` is maintained via Secret Manager and accessed purely server-side.
+2. **WebSocket Support:** Native WebSocket proxying on `/live` for low-latency conversational audio.
+3. **Scale-to-Zero Efficiency:** Instant scale-to-zero when idle, minimizing runtime costs (`min-instances=0`).
+4. **Health Check Probing:** `/api/health` endpoint responding with system status and latency verification.
 
-The AI Studio Cloud Run service (`neurophenom-ai` in `us-west1`) works well for demos because:
+## Deployment Setup
 
-1. Gemini API key stays on the server
-2. HTTP + WebSocket traffic is proxied via `/api-proxy`
-3. The browser does not need a user-entered API key
-
-This repo now supports the same model when built with `VITE_SHOWCASE_MODE=true` and `GEMINI_API_KEY` set on Cloud Run.
-
-## One-time GCP setup
+### 1. Build & Deploy via Cloud Build
 
 ```bash
 PROJECT=microphenom-ai
 REGION=us-west1
 SECRET=gemini-api-key
 
-# Ensure secret exists (already present in this project as gemini-api-key)
-# echo -n "$GEMINI_API_KEY" | gcloud secrets create "$SECRET" --project="$PROJECT" --data-file=-
-
-# Artifact Registry repo (Cloud Build config expects this path)
-gcloud artifacts repositories create cloud-run-source-deploy \
+# Submit Cloud Build to compile container image and deploy to Cloud Run
+gcloud builds submit \
   --project="$PROJECT" \
-  --repository-format=docker \
-  --location="$REGION" \
-  --quiet || true
-
-# Deploy once from a local checkout
-gcloud builds submit --project="$PROJECT" --config=cloudbuild.yaml \
-  --substitutions=COMMIT_SHA="$(git rev-parse HEAD)" .
+  --config=cloudbuild.yaml \
+  --substitutions=COMMIT_SHA="$(git rev-parse HEAD)" \
+  .
 ```
 
-Service name: **`neurophenom-ai-showcase`** (does not overwrite the AI Studio applet `neurophenom-ai`).
+### 2. Manual `gcloud run deploy` (Direct Container)
 
-## GitHub Actions CD
+```bash
+# Build local docker image
+docker build -t gcr.io/$PROJECT/neurophenom-ai:latest .
+
+# Push image
+docker push gcr.io/$PROJECT/neurophenom-ai:latest
+
+# Deploy to Cloud Run
+gcloud run deploy neurophenom-ai \
+  --image=gcr.io/$PROJECT/neurophenom-ai:latest \
+  --project="$PROJECT" \
+  --region="$REGION" \
+  --platform=managed \
+  --allow-unauthenticated \
+  --set-secrets=GEMINI_API_KEY=gemini-api-key:latest \
+  --port=8080
+```
+
+## Continuous Deployment via GitHub Actions
 
 Workflow: [`.github/workflows/cloud_run_showcase.yml`](../.github/workflows/cloud_run_showcase.yml)
 
-Required repo secrets:
+Required GitHub Repository Secrets:
 
 | Secret | Purpose |
 |--------|---------|
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF provider for GitHub → GCP |
-| `GCP_SERVICE_ACCOUNT` | Deployer SA email |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Workload Identity Federation provider ID |
+| `GCP_SERVICE_ACCOUNT` | Service Account email with Cloud Run Admin & Cloud Build Editor permissions |
 
-Until WIF is configured, use the local `gcloud builds submit` command above, or `workflow_dispatch` after secrets exist.
+## Health Check & Verification
 
-## Demo URL
-
-After deploy:
+Once deployed, query the health probe endpoint:
 
 ```bash
-gcloud run services describe neurophenom-ai-showcase \
-  --project=microphenom-ai --region=us-west1 \
-  --format='value(status.url)'
+URL="$(gcloud run services describe neurophenom-ai --project=$PROJECT --region=$REGION --format='value(status.url)')"
+curl -s "${URL}/api/health"
 ```
-
-Optional: map `showcase.neurophenomai.newpsychonaut.com` → that URL (keep `www` on Azure).
-
-## Cost guardrails
-
-- `min-instances=0`, `max-instances=2`
-- Prefer short demo windows
-- Budget alerts on `microphenom-ai`
+Expected response:
+```json
+{
+  "ok": true,
+  "status": "healthy",
+  "service": "neurophenom-ai",
+  "version": "1.4.0",
+  "platform": "google-cloud-run"
+}
+```

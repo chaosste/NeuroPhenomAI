@@ -39,6 +39,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
   const [copiedNotification, setCopiedNotification] = useState(false);
   const [selection, setSelection] = useState<{ segmentIndex: number; start: number; end: number; rect: DOMRect | null } | null>(null);
   const [newCodeName, setNewCodeName] = useState('');
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement>(null);
 
@@ -182,22 +183,84 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
     await exportCachedAudio(session.id);
   };
 
-  const handleExportProtocol = () => {
-    const protocolData = {
-      id: session.id,
+  const handleDownloadSession = async () => {
+    const exportData = {
+      sessionId: session.id,
       date: session.date,
       type: session.type,
-      analysis: session.analysis,
-      codes: session.codes,
-      annotations: session.annotations,
+      duration: session.duration,
+      summary: session.analysis?.summary || '',
+      transcript: session.analysis?.transcript || [],
+      takeaways: session.analysis?.takeaways || [],
+      modalities: session.analysis?.modalities || [],
+      phasesCount: session.analysis?.phasesCount || 0,
+      diachronicStructure: session.analysis?.diachronicStructure || [],
+      synchronicStructure: session.analysis?.synchronicStructure || [],
+      thematicCodes: session.codes || [],
+      codedAnnotations: session.annotations || [],
+      rawAnalysis: session.analysis,
+      exportMetadata: {
+        exportedAt: new Date().toISOString(),
+        format: 'neurophenom-v1.4',
+        protocol: 'Micro-Phenomenological Architecture',
+      },
     };
-    const blob = new Blob([JSON.stringify(protocolData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `neurophenom_protocol_${session.id.slice(0, 8)}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    const jsonString = JSON.stringify(exportData, null, 2);
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const safeSummary = (session.analysis?.summary || 'session')
+      .slice(0, 24)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    const filename = `neurophenom_analysis_${safeSummary || session.id.slice(0, 8)}_${dateStamp}.json`;
+
+    // 1. Attempt File System Access API (window.showSaveFilePicker)
+    if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+      try {
+        const fileHandle = await (window as any).showSaveFilePicker({
+          suggestedName: filename,
+          types: [
+            {
+              description: 'JSON Analysis & Transcript (*.json)',
+              accept: {
+                'application/json': ['.json'],
+              },
+            },
+          ],
+        });
+        const writableStream = await fileHandle.createWritable();
+        await writableStream.write(jsonString);
+        await writableStream.close();
+        setDownloadSuccess(true);
+        setTimeout(() => setDownloadSuccess(false), 3000);
+        return;
+      } catch (err: any) {
+        // If user actively cancelled the picker dialog, do not trigger fallback or error
+        if (err.name === 'AbortError') {
+          return;
+        }
+        console.warn('File System Access API failed or restricted, falling back to Blob download:', err);
+      }
+    }
+
+    // 2. Blob-based download mechanism fallback
+    try {
+      const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 3000);
+    } catch (blobErr) {
+      console.error('Blob download failed:', blobErr);
+      alert('Could not download session analysis file.');
+    }
   };
 
   const handleReanalyze = async () => {
@@ -332,14 +395,6 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={handleExportProtocol}
-              className="rounded-full text-[10px] font-black tracking-widest flex items-center gap-2"
-            >
-              <Download size={12} /> Export JSON
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
               onClick={handleReanalyze}
               loading={isReanalyzing}
               className="rounded-full text-[10px] font-black tracking-widest flex items-center gap-2"
@@ -349,12 +404,36 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
           </div>
         </div>
 
-        {/* Tab switcher */}
-        <div className="flex items-center gap-4">
+        {/* Tab switcher & Download Action */}
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleDownloadSession}
+            className={`rounded-2xl text-[10px] font-black tracking-widest flex items-center gap-2 border-2 border-black transition-all ${
+              downloadSuccess 
+                ? 'bg-black text-white' 
+                : 'bg-white hover:bg-neutral-100 text-black'
+            }`}
+            title="Download structured JSON session analysis and transcript"
+          >
+            {downloadSuccess ? (
+              <>
+                <Check size={14} className="text-emerald-400" />
+                <span>Downloaded</span>
+              </>
+            ) : (
+              <>
+                <Download size={14} />
+                <span>Download</span>
+              </>
+            )}
+          </Button>
+
           <div className="flex bg-neutral-100 p-1 rounded-2xl border border-black/5">
             <button 
               onClick={() => setActiveTab('coding')}
-              className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest transition-all rounded-xl ${
+              className={`px-5 md:px-6 py-2 text-[10px] font-black uppercase tracking-widest transition-all rounded-xl ${
                 activeTab === 'coding' ? 'bg-black text-white shadow-sm' : 'text-neutral-500 hover:text-black'
               }`}
             >
@@ -362,11 +441,11 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
             </button>
             <button 
               onClick={() => setActiveTab('report')}
-              className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest transition-all rounded-xl ${
+              className={`px-5 md:px-6 py-2 text-[10px] font-black uppercase tracking-widest transition-all rounded-xl ${
                 activeTab === 'report' ? 'bg-black text-white shadow-sm' : 'text-neutral-500 hover:text-black'
               }`}
             >
-              Thematic Synthesis
+              Synthesis
             </button>
           </div>
         </div>
@@ -571,9 +650,27 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ session, onUpdate }) => {
           <div className="flex-1 overflow-y-auto p-8 md:p-16 lg:p-24 bg-white no-scrollbar">
             <div className="max-w-4xl mx-auto space-y-24 pb-24">
               <section className="animate-in fade-in duration-500">
-                <div className="flex items-center gap-3 mb-8 opacity-40">
-                  <FileText size={18} />
-                  <h4 className="text-[10px] font-black uppercase tracking-[0.6em]">Structural Synthesis</h4>
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+                  <div className="flex items-center gap-3 opacity-40">
+                    <FileText size={18} />
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.6em]">Structural Synthesis</h4>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleDownloadSession}
+                    className="rounded-full text-[10px] font-black tracking-widest flex items-center gap-2 border-black"
+                  >
+                    {downloadSuccess ? (
+                      <>
+                        <Check size={12} className="text-emerald-500" /> Exported JSON
+                      </>
+                    ) : (
+                      <>
+                        <Download size={12} /> Download Session JSON
+                      </>
+                    )}
+                  </Button>
                 </div>
                 <div className="border-l-4 border-black pl-8 py-2">
                   <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tighter leading-tight">

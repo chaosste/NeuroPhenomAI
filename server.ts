@@ -55,6 +55,18 @@ async function executeWithModelFallback(params: {
   throw lastError;
 }
 
+// Health check endpoint for Cloud Run and container probes
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: true,
+    status: 'healthy',
+    service: 'neurophenom-ai',
+    version: '1.4.0',
+    platform: 'google-cloud-run',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Welcome message generation endpoint
 app.post('/api/gemini/welcome', async (req, res) => {
   try {
